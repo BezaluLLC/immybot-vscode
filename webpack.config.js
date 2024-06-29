@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -9,8 +10,8 @@
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
 
-const path = require('path');
-const webpack = require('webpack');
+import { join } from 'path';
+import { ProvidePlugin } from 'webpack';
 
 /** @type WebpackConfig */
 const webExtensionConfig = {
@@ -22,7 +23,7 @@ const webExtensionConfig = {
 	},
 	output: {
 		filename: '[name].js',
-		path: path.join(__dirname, './dist/web'),
+		path: join(__dirname, './dist/web'),
 		libraryTarget: 'commonjs',
 	},
 	resolve: {
@@ -52,7 +53,7 @@ const webExtensionConfig = {
 		],
 	},
 	plugins: [
-		new webpack.ProvidePlugin({
+		new ProvidePlugin({
 			process: 'process/browser', // provide a shim for the global `process` variable
 		}),
 	],
@@ -65,4 +66,4 @@ const webExtensionConfig = {
 	devtool: 'nosources-source-map', // create a source map that points to the original source file
 };
 
-module.exports = [webExtensionConfig];
+export default [webExtensionConfig];

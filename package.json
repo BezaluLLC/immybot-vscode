@@ -13,7 +13,7 @@
 	"categories": [
 		"Other"
 	],
-	"activationEvents": [],
+	"activationEvents": ["onStartupFinished"],
 	"browser": "./dist/web/extension.js",
 	"contributes": {
 		"commands": [
@@ -21,7 +21,32 @@
 				"command": "helloworld-web-sample.helloWorld",
 				"title": "Hello World"
 			}
-		]
+		],
+		"viewsContainers": {
+			"panel": [
+				{
+					"id": "console-view-container",
+					"title": "ImmyBot",
+					"icon": "immybot.svg"
+				}
+			],
+			"activitybar": [
+				{
+					"id": "sidebar-view-container",
+					"title": "ImmyBot",
+					"icon": "src/immybot.svg",
+					"contextualTitle": "ImmyBot"
+				}
+			]
+		},
+		"views": {
+			"sidebar-view-container": [
+				{
+					"id": "whatever",
+					"name": "Whatever"
+				}
+			]			
+		}
 	},
 	"scripts": {
 		"test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js",
