@@ -1,1 +1,1 @@
-// moved to helloworld-web-sample/webpack.config.js
+// moved to immybot/webpack.config.js

@@ -1,146 +1,109 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+const CLIENT_ID = 'f72a44d4-d2d4-450e-a2db-76b307cd045f';
 
+const SCOPES = [
+	`VSCODE_CLIENT_ID:${CLIENT_ID}`,
+	`VSCODE_TENANT:common`,
+	'profile',
+	'openid',
+	'offline_access',
+	'Files.ReadWrite',
+];
+export class ResponseError extends Error {
+	public static is(e: unknown, statusCode: number): e is ResponseError {
+		return e instanceof ResponseError && e.response.status === statusCode;
+	}
+
+	constructor(public readonly response: Response, public readonly body: string) {
+		super(`${response.status} ${response.statusText} from ${response.url}: ${body}`);
+	}
+}
+export class ImmyBotClient {
+	constructor(private readonly accessToken: string) { }
+
+
+	public async fetchJson<T>(route: string, params?: RequestInit): Promise<T> {
+		const response = await this.fetch(route, params);
+		return await response.json();
+	}
+	private async fetch(route: string, params: RequestInit = {}) {
+		params.headers = new Headers(params.headers);
+		params.headers.set('authorization', `Bearer ${this.accessToken}`);
+
+		const response = await fetch(route.startsWith('https:') ? route : `https://immense.immy.bot` + route, params);
+		if (!response.ok) {
+			let body: string;
+			try {
+				body = await response.text();
+			} catch {
+				body = '<unreadable>';
+			}
+
+			throw new ResponseError(response, body);
+		}
+
+		return response;
+	}
+}
+
+export class ClientProvider {
+	private session?: Thenable<vscode.AuthenticationSession>;
+
+	public async demandForFs() {
+		const session = await this.getSession();
+		return new ImmyBotClient(session.accessToken);
+	}
+
+	public async request() {
+		try {
+			return this.demandForFs();
+		} catch {
+			return undefined;
+		}
+	}
+
+	private getSession() {
+		this.session ??= vscode.authentication.getSession('microsoft', SCOPES, {
+			createIfNone: true,
+		});
+
+		return this.session;
+	}
+}
 // This method is called when your extension is activated
 // your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "helloworld-web-sample" is now active in the web extension host!');
-
+	console.log('Congratulations, your extension "immybot" is now active in the web extension host!');
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
-	context.subscriptions.push(vscode.commands.registerCommand('helloworld-web-sample.helloWorld', () => {
+	context.subscriptions.push(vscode.commands.registerCommand('immybot.helloWorld', () => {
 		// The code you place here will be executed every time your command is executed
 
 		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from helloworld-web-sample in a web extension host! POOOOOP!!');
+		vscode.window.showInformationMessage('Hello World from immybot in a web extension host! POOOOOP!!');
 	}));
-	const provider = new ColorsViewProvider(context.extensionUri);
-
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(ColorsViewProvider.viewType, provider));
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand('calicoColors.signIn', () => {			provider.addColor();
-		}));
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand('calicoColors.clearColors', () => {
-			provider.clearColors();
-		}));
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand('immybot.signIn', () => {
-			provider.signIn();
+		vscode.commands.registerCommand('immybot.signIn', async () => {
+			await signIn();
 		}));
 }
-class ColorsViewProvider implements vscode.WebviewViewProvider {
 
-	public static readonly viewType = 'calicoColors.colorsView';
 
-	private _view?: vscode.WebviewView;
+async function signIn() {
+	const session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
+	console.log(session);
 
-	constructor(
-		private readonly _extensionUri: vscode.Uri,
-	) { }
-
-	public resolveWebviewView(
-		webviewView: vscode.WebviewView,
-		context: vscode.WebviewViewResolveContext,
-		_token: vscode.CancellationToken,
-	) {
-		this._view = webviewView;
-
-		webviewView.webview.options = {
-			// Allow scripts in the webview
-			enableScripts: true,
-
-			localResourceRoots: [
-				this._extensionUri
-			]
-		};
-
-		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-
-		webviewView.webview.onDidReceiveMessage(data => {
-			switch (data.type) {
-				case 'colorSelected':
-					{
-						vscode.window.activeTextEditor?.insertSnippet(new vscode.SnippetString(`#${data.value}`));
-						break;
-					}
-			}
-		});
-	}
-
-	public addColor() {
-		if (this._view) {
-			this._view.show?.(true); // `show` is not implemented in 1.49 but is for 1.50 insiders
-			this._view.webview.postMessage({ type: 'addColor' });
-		}
-	}
-
-	public clearColors() {
-		if (this._view) {
-			this._view.webview.postMessage({ type: 'clearColors' });
-		}
-	}
-
-	public signIn() {
-		if (this._view) {
-			this._view.show?.(true);
-			this._view.webview.postMessage({ type: 'signIn' });
-		}
-	}
-
-	private _getHtmlForWebview(webview: vscode.Webview) {
-		// Get the local path to main script run in the webview, then convert it to a uri we can use in the webview.
-		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
-
-		// Do the same for the stylesheet.
-		const styleResetUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'reset.css'));
-		const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'vscode.css'));
-		const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.css'));
-
-		// Use a nonce to only allow a specific script to be run.
-		const nonce = getNonce();
-
-		return `<!DOCTYPE html>
-			<html lang="en">
-			<head>
-				<meta charset="UTF-8">
-
-				<!--
-					Use a content security policy to only allow loading styles from our extension directory,
-					and only allow scripts that have a specific nonce.
-					(See the 'webview-sample' extension sample for img-src content security policy examples)
-				-->
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-
-				<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-				<link href="${styleResetUri}" rel="stylesheet">
-				<link href="${styleVSCodeUri}" rel="stylesheet">
-				<link href="${styleMainUri}" rel="stylesheet">
-
-				<title>Cat Colors</title>
-			</head>
-			<body>
-				<ul class="color-list">
-				</ul>
-
-				<button class="add-color-button">Add Color</button>
-				<button class="sign-in-button">Sign In</button>
-
-				<script nonce="${nonce}" src="${scriptUri}"></script>
-			</body>
-			</html>`;
-	}
+	const client = new ImmyBotClient(session!.accessToken);
+	const response = await client.fetchJson<any>('/api/v1/computers');
+	console.log(response);
 }
 
 function getNonce() {

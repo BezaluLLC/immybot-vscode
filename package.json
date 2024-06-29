@@ -1,12 +1,12 @@
 {
-	"name": "helloworld-web-sample",
-	"displayName": "helloworld-web-sample",
+	"name": "immybot",
+	"displayName": "immybot",
 	"description": "HelloWorld example for VS Code in the browser",
 	"version": "0.0.1",
 	"publisher": "vscode-samples",
 	"private": true,
 	"license": "MIT",
-	"repository": "https://github.com/microsoft/vscode-extension-samples/helloworld-web-sample",
+	"repository": "https://github.com/microsoft/vscode-extension-samples/immybot",
 	"engines": {
 		"vscode": "^1.74.0"
 	},
@@ -40,29 +40,16 @@
 			}
 		],
 		"menus": {
-			"view/title": [
-				{
-					"command": "calicoColors.clearColors",
-					"group": "navigation",
-					"when": "view == calicoColors.colorsView"
-				}
-			]
+			"view/title": []
 		},
 		"commands": [
 			{
-				"command": "calicoColors.addColor",
-				"category": "Calico Colors",
-				"title": "Add Color"
-			},
-			{
-				"command": "calicoColors.clearColors",
-				"category": "Calico Colors",
-				"title": "Clear Colors",
-				"icon": "$(clear-all)"
-			},
-			{
-				"command": "helloworld-web-sample.helloWorld",
+				"command": "immybot.helloWorld",
 				"title": "Hello World"
+			},
+			{
+				"command": "immybot.signIn",
+				"title": "Sign In"
 			}
 		],
 		"viewsContainers": {
