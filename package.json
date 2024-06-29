@@ -13,10 +13,53 @@
 	"categories": [
 		"Other"
 	],
-	"activationEvents": ["onStartupFinished"],
+	"activationEvents": [
+		"onStartupFinished"
+	],
 	"browser": "./dist/web/extension.js",
 	"contributes": {
+		"views": {
+			"explorer": [
+				{
+					"type": "webview",
+					"id": "calicoColors.colorsView",
+					"name": "Calico Colors"
+				}
+			],
+			"sidebar-view-container": [
+				{
+					"id": "signin",
+					"name": "Sign In"
+				}
+			]
+		},
+		"viewsWelcome": [
+			{
+				"view": "signin",
+				"contents": "Sign in to ImmyBot\n[Sign In](command:immybot.signIn)"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "calicoColors.clearColors",
+					"group": "navigation",
+					"when": "view == calicoColors.colorsView"
+				}
+			]
+		},
 		"commands": [
+			{
+				"command": "calicoColors.addColor",
+				"category": "Calico Colors",
+				"title": "Add Color"
+			},
+			{
+				"command": "calicoColors.clearColors",
+				"category": "Calico Colors",
+				"title": "Clear Colors",
+				"icon": "$(clear-all)"
+			},
 			{
 				"command": "helloworld-web-sample.helloWorld",
 				"title": "Hello World"
@@ -38,14 +81,6 @@
 					"contextualTitle": "ImmyBot"
 				}
 			]
-		},
-		"views": {
-			"sidebar-view-container": [
-				{
-					"id": "whatever",
-					"name": "Whatever"
-				}
-			]			
 		}
 	},
 	"scripts": {

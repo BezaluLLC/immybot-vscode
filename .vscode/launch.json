@@ -47,7 +47,8 @@
 			"url": "http://localhost:3000",
 			"profileStartup": false,
 			"webRoot": "${workspaceFolder}",
-			"preLaunchTask": "browser-debug"
+			"preLaunchTask": "browser-debug",
+			"request": "launch"
 		},
 		{
 			"name": "Extension Tests in VS Code",
