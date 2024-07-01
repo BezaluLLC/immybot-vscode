@@ -28,25 +28,31 @@ export class ImmyBotClient {
 
 	public async fetchJson<T>(route: string, params?: RequestInit): Promise<T> {
 		const response = await this.fetch(route, params);
-		return await response.json();
+		return await response?.json();
 	}
 	private async fetch(route: string, params: RequestInit = {}) {
-		params.headers = new Headers(params.headers);
-		params.headers.set('authorization', `Bearer ${this.accessToken}`);
-
-		const response = await fetch(route.startsWith('https:') ? route : `https://immense.immy.bot` + route, params);
-		if (!response.ok) {
-			let body: string;
-			try {
-				body = await response.text();
-			} catch {
-				body = '<unreadable>';
+		const routeToFetch = route.startsWith('https:') ? route : `http://localhost:5000` + route;
+		// params.mode = 'no-cors';
+		params.credentials = 'include';
+		try {
+			console.log("fetching", routeToFetch, params);
+			const response = await fetch(routeToFetch, params);
+			console.log(response);
+			if (!response.ok) {
+				let body: string;
+				try {
+					body = await response.text();
+					throw new ResponseError(response, body);
+				} catch {
+					body = '<unreadable>';
+				}
 			}
-
-			throw new ResponseError(response, body);
+			return response;
 		}
-
-		return response;
+		catch (exceptionVar) {
+			console.log("error", exceptionVar);
+			// throw new ResponseError(exceptionVar);
+		}
 	}
 }
 
@@ -96,24 +102,35 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 }
 
+function bytesToBase64(bytes: Uint8Array) {
+	const binString = Array.from(bytes, (byte) =>
+		String.fromCodePoint(byte),
+	).join("");
+	return btoa(binString);
+}
 
 async function signIn() {
 	const session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
 	console.log(session);
-
-	const client = new ImmyBotClient(session!.accessToken);
-	const response = await client.fetchJson<any>('/api/v1/computers');
-	console.log(response);
-}
-
-function getNonce() {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
+	if (session !== undefined && session.accessToken !== undefined) {
+		vscode.window.showInformationMessage('Signed in as ' + session.account.label);
+		const client = new ImmyBotClient(session!.accessToken);
+		const token = bytesToBase64(new TextEncoder().encode(`:${session.accessToken}`));
+		const response = await client.fetchJson<any>('/api/v1/computers',
+			{
+				headers: {
+					// CORS policy is AllowWithCredentials, but CORS only considers Basic auth as credentials
+					authorization: `Basic ${token}`,
+					// authorization: `Bearer ${session.accessToken}`,
+					// eslint-disable-next-line @typescript-eslint/naming-convention
+					'content-type': 'application/json',
+				},
+				
+			});
+		console.log(response);
 	}
-	return text;
 }
+
 // This method is called when your extension is deactivated
 export function deactivate() {
 	// Noop
