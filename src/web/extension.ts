@@ -32,8 +32,6 @@ export class ImmyBotClient {
 	}
 	private async fetch(route: string, params: RequestInit = {}) {
 		const routeToFetch = route.startsWith('https:') ? route : `http://localhost:5000` + route;
-		// params.mode = 'no-cors';
-		params.credentials = 'include';
 		try {
 			console.log("fetching", routeToFetch, params);
 			const response = await fetch(routeToFetch, params);
@@ -102,31 +100,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 }
 
-function bytesToBase64(bytes: Uint8Array) {
-	const binString = Array.from(bytes, (byte) =>
-		String.fromCodePoint(byte),
-	).join("");
-	return btoa(binString);
-}
-
 async function signIn() {
 	const session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
 	console.log(session);
 	if (session !== undefined && session.accessToken !== undefined) {
 		vscode.window.showInformationMessage('Signed in as ' + session.account.label);
 		const client = new ImmyBotClient(session!.accessToken);
-		const token = bytesToBase64(new TextEncoder().encode(`:${session.accessToken}`));
-		const response = await client.fetchJson<any>('/api/v1/computers',
-			{
-				headers: {
-					// CORS policy is AllowWithCredentials, but CORS only considers Basic auth as credentials
-					authorization: `Basic ${token}`,
-					// authorization: `Bearer ${session.accessToken}`,
-					// eslint-disable-next-line @typescript-eslint/naming-convention
-					'content-type': 'application/json',
-				},
-				
-			});
+		const response = await client.fetchJson<any>('/api/v1/computers');
 		console.log(response);
 	}
 }
