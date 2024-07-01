@@ -35,7 +35,6 @@ export class ImmyBotClient {
 		try {
 			console.log("fetching", routeToFetch, params);
 			const response = await fetch(routeToFetch, params);
-			console.log(response);
 			if (!response.ok) {
 				let body: string;
 				try {
@@ -48,7 +47,8 @@ export class ImmyBotClient {
 			return response;
 		}
 		catch (exceptionVar) {
-			console.log("error", exceptionVar);
+			console.log("error", exceptionVar)
+
 			// throw new ResponseError(exceptionVar);
 		}
 	}

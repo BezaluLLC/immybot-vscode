@@ -20,13 +20,9 @@
 	"contributes": {
 		"views": {
 			"explorer": [
-				{
-					"type": "webview",
-					"id": "calicoColors.colorsView",
-					"name": "Calico Colors"
-				}
+				
 			],
-			"sidebar-view-container": [
+			"sideBarViewContainer": [
 				{
 					"id": "signin",
 					"name": "Sign In"
@@ -62,7 +58,7 @@
 			],
 			"activitybar": [
 				{
-					"id": "sidebar-view-container",
+					"id": "sideBarViewContainer",
 					"title": "ImmyBot",
 					"icon": "src/immybot.svg",
 					"contextualTitle": "ImmyBot"

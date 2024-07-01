@@ -13,7 +13,10 @@
         "plugin:@typescript-eslint/recommended"
     ],
     "rules": {
-        "@typescript-eslint/naming-convention": "warn",
+        "@typescript-eslint/naming-convention": {
+         "ignores": ["*.json"],
+         "severity": "warn"
+        },
         "@typescript-eslint/semi": "warn",
         "curly": "warn",
         "eqeqeq": "warn",
@@ -22,5 +25,17 @@
     },
     "ignorePatterns": [
         "**/*.d.ts"
-    ]
+    ],
+    "settings": {
+        "import/resolver": {
+            "node": {
+                "extensions": [
+                    ".js",
+                    ".jsx",
+                    ".ts",
+                    ".tsx"
+                ]
+            }
+        }
+    }
 }
