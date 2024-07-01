@@ -10,10 +10,7 @@
 				"kind": "build",
 				"isDefault": true
 			},
-			"problemMatcher": [
-				"$ts-webpack",
-				"$tslint-webpack"
-			]
+			
 		},
 		{
 			"label": "browser-debug",
@@ -24,10 +21,7 @@
 				"watch-web"
 			],
 			"isBackground": true,
-			"problemMatcher": [
-				"$ts-webpack-watch",
-				"$tslint-webpack-watch"
-			],
+			
 			
 		},
 		{
