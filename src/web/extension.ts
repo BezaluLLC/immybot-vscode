@@ -3,8 +3,10 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-const CLIENT_ID = 'f72a44d4-d2d4-450e-a2db-76b307cd045f';
+import { MemFS } from './fileSystemProvider';
+import { ImmyBotClient } from './immyBotClient';
 
+const CLIENT_ID = 'f72a44d4-d2d4-450e-a2db-76b307cd045f';
 const SCOPES = [
 	`VSCODE_CLIENT_ID:${CLIENT_ID}`,
 	`VSCODE_TENANT:common`,
@@ -13,71 +15,7 @@ const SCOPES = [
 	'offline_access',
 	'Files.ReadWrite',
 ];
-export class ResponseError extends Error {
-	public static is(e: unknown, statusCode: number): e is ResponseError {
-		return e instanceof ResponseError && e.response.status === statusCode;
-	}
 
-	constructor(public readonly response: Response, public readonly body: string) {
-		super(`${response.status} ${response.statusText} from ${response.url}: ${body}`);
-	}
-}
-export class ImmyBotClient {
-	constructor(private readonly accessToken: string) { }
-
-
-	public async fetchJson<T>(route: string, params?: RequestInit): Promise<T> {
-		const response = await this.fetch(route, params);
-		return await response?.json();
-	}
-	private async fetch(route: string, params: RequestInit = {}) {
-		const routeToFetch = route.startsWith('https:') ? route : `http://localhost:5000` + route;
-		try {
-			console.log("fetching", routeToFetch, params);
-			const response = await fetch(routeToFetch, params);
-			if (!response.ok) {
-				let body: string;
-				try {
-					body = await response.text();
-					throw new ResponseError(response, body);
-				} catch {
-					body = '<unreadable>';
-				}
-			}
-			return response;
-		}
-		catch (exceptionVar) {
-			console.log("error", exceptionVar)
-
-			// throw new ResponseError(exceptionVar);
-		}
-	}
-}
-
-export class ClientProvider {
-	private session?: Thenable<vscode.AuthenticationSession>;
-
-	public async demandForFs() {
-		const session = await this.getSession();
-		return new ImmyBotClient(session.accessToken);
-	}
-
-	public async request() {
-		try {
-			return this.demandForFs();
-		} catch {
-			return undefined;
-		}
-	}
-
-	private getSession() {
-		this.session ??= vscode.authentication.getSession('microsoft', SCOPES, {
-			createIfNone: true,
-		});
-
-		return this.session;
-	}
-}
 // This method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
@@ -98,6 +36,72 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('immybot.signIn', async () => {
 			await signIn();
 		}));
+
+
+	const memFs = new MemFS();
+	context.subscriptions.push(vscode.workspace.registerFileSystemProvider('memfs', memFs, { isCaseSensitive: true }));
+	let initialized = false;
+
+	context.subscriptions.push(vscode.commands.registerCommand('memfs.reset', _ => {
+		for (const [name] of memFs.readDirectory(vscode.Uri.parse('memfs:/'))) {
+			memFs.delete(vscode.Uri.parse(`memfs:/${name}`));
+		}
+		initialized = false;
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('memfs.addFile', _ => {
+		if (initialized) {
+			memFs.writeFile(vscode.Uri.parse(`memfs:/file.txt`), Buffer.from('foo'), { create: true, overwrite: true });
+		}
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('memfs.deleteFile', _ => {
+		if (initialized) {
+			memFs.delete(vscode.Uri.parse('memfs:/file.txt'));
+		}
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('memfs.init', async _ => {
+		// if (initialized) {
+		// 	return;
+		// }
+
+		enum ScriptCategory {
+			SoftwareDetection,
+			SoftwareAutoUpdate,
+			SoftwareVersionAction,
+			MaintenanceTaskSetter,
+			MetascriptDeploymentTarget,
+			FilterScriptDeploymentTarget,
+			DeviceInventory,
+			Function,
+			ImmySystem,
+			DynamicVersions,
+			DownloadInstaller,
+			Module,
+			Preflight,
+			Integration
+		}
+
+		initialized = true;
+		const session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
+		console.log(session);
+		if (session !== undefined && session.accessToken !== undefined) {
+			vscode.window.showInformationMessage('Fetching scripts');
+			const client = new ImmyBotClient(session!.accessToken);
+			const response = await client.fetchJson<any>('/api/v1/scripts');
+			console.log(response);
+
+			response.forEach((script: any) => {
+				const extension = script.scriptCategory === 11 ? '.psm1' : '.ps1';
+				const fileName = `memfs:/${ScriptCategory[script.scriptCategory]}/${script.Name}${extension}`;
+				memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(script.action), { create: true, overwrite: true });
+			});
+		}
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('memfs.workspaceInit', _ => {
+		vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('memfs:/'), name: "MemFS - Sample" });
+	}));
 }
 
 async function signIn() {
@@ -106,10 +110,12 @@ async function signIn() {
 	if (session !== undefined && session.accessToken !== undefined) {
 		vscode.window.showInformationMessage('Signed in as ' + session.account.label);
 		const client = new ImmyBotClient(session!.accessToken);
-		const response = await client.fetchJson<any>('/api/v1/computers');
+		const response = await client.fetchJson<any>('/api/v1/scripts');
 		console.log(response);
 	}
 }
+
+
 
 // This method is called when your extension is deactivated
 export function deactivate() {

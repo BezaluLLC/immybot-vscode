@@ -19,9 +19,7 @@
 	"browser": "./dist/web/extension.js",
 	"contributes": {
 		"views": {
-			"explorer": [
-				
-			],
+			"explorer": [],
 			"sideBarViewContainer": [
 				{
 					"id": "signin",
@@ -36,7 +34,28 @@
 			}
 		],
 		"menus": {
-			"view/title": []
+			"commandPalette": [
+				{
+					"command": "memfs.init",
+					"when": "workbenchState == workspace"
+				},
+				{
+					"command": "memfs.reset",
+					"when": "workbenchState == workspace"
+				},
+				{
+					"command": "memfs.deleteFile",
+					"when": "workbenchState == workspace"
+				},
+				{
+					"command": "memfs.addFile",
+					"when": "workbenchState == workspace"
+				},
+				{
+					"command": "memfs.workspaceInit",
+					"when": "workbenchState != workspace"
+				}
+			]
 		},
 		"commands": [
 			{
@@ -46,6 +65,31 @@
 			{
 				"command": "immybot.signIn",
 				"title": "Sign In"
+			},
+			{
+				"command": "memfs.workspaceInit",
+				"title": "Setup Workspace",
+				"category": "MemFS"
+			},
+			{
+				"command": "memfs.init",
+				"title": "Create Files",
+				"category": "MemFS"
+			},
+			{
+				"command": "memfs.reset",
+				"title": "Delete Files",
+				"category": "MemFS"
+			},
+			{
+				"command": "memfs.deleteFile",
+				"title": "Delete \"file.txt\"",
+				"category": "MemFS"
+			},
+			{
+				"command": "memfs.addFile",
+				"title": "Add \"file.txt\"",
+				"category": "MemFS"
 			}
 		],
 		"viewsContainers": {
