@@ -25,9 +25,9 @@
 			
 		},
 		{
+			"label": "watch-web2",
 			"type": "npm",
 			"script": "watch-web",
-			"group": "build",
 			"isBackground": true,
 			"problemMatcher": [
 				"$ts-webpack-watch",

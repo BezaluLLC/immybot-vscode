@@ -5,6 +5,7 @@
 import * as vscode from 'vscode';
 import { MemFS } from './fileSystemProvider';
 import { ImmyBotClient } from './immyBotClient';
+const memFs = new MemFS();
 
 const CLIENT_ID = 'f72a44d4-d2d4-450e-a2db-76b307cd045f';
 const SCOPES = [
@@ -38,15 +39,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 
 
-	const memFs = new MemFS();
 	context.subscriptions.push(vscode.workspace.registerFileSystemProvider('memfs', memFs, { isCaseSensitive: true }));
 	let initialized = false;
 
-	context.subscriptions.push(vscode.commands.registerCommand('memfs.reset', _ => {
-		for (const [name] of memFs.readDirectory(vscode.Uri.parse('memfs:/'))) {
-			memFs.delete(vscode.Uri.parse(`memfs:/${name}`));
-		}
-		initialized = false;
+	context.subscriptions.push(vscode.commands.registerCommand('memfs.reset', async _ => {
+		await signIn();
+		// for (const [name] of memFs.readDirectory(vscode.Uri.parse('memfs:/'))) {
+		// 	memFs.delete(vscode.Uri.parse(`memfs:/${name}`));
+		// }
+		// initialized = false;
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('memfs.addFile', _ => {
@@ -60,11 +61,18 @@ export async function activate(context: vscode.ExtensionContext) {
 			memFs.delete(vscode.Uri.parse('memfs:/file.txt'));
 		}
 	}));
+	vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('memfs:/'), name: 'ImmyBot' });
+	await signIn();
+}
 
-	context.subscriptions.push(vscode.commands.registerCommand('memfs.init', async _ => {
-		// if (initialized) {
-		// 	return;
-		// }
+async function signIn() {
+	const session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
+	console.log(session);
+	if (session !== undefined && session.accessToken !== undefined) {
+		vscode.window.showInformationMessage('Signed in as ' + session.account.label);
+		const client = new ImmyBotClient(session!.accessToken);
+		const response = await client.fetchJson<any>('/api/v1/scripts');
+		console.log(response);
 
 		enum ScriptCategory {
 			SoftwareDetection,
@@ -80,40 +88,31 @@ export async function activate(context: vscode.ExtensionContext) {
 			DownloadInstaller,
 			Module,
 			Preflight,
-			Integration
+			Integration,
+			Unknown
 		}
 
-		initialized = true;
-		const session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
+		for (const category of Object.values(ScriptCategory)) {
+			if (typeof category === 'string') {
+				memFs.createDirectory(vscode.Uri.parse(`memfs:/${category}`));
+			}
+		}
+
 		console.log(session);
-		if (session !== undefined && session.accessToken !== undefined) {
-			vscode.window.showInformationMessage('Fetching scripts');
-			const client = new ImmyBotClient(session!.accessToken);
-			const response = await client.fetchJson<any>('/api/v1/scripts');
-			console.log(response);
-
-			response.forEach((script: any) => {
-				const extension = script.scriptCategory === 11 ? '.psm1' : '.ps1';
-				const fileName = `memfs:/${ScriptCategory[script.scriptCategory]}/${script.Name}${extension}`;
-				memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(script.action), { create: true, overwrite: true });
-			});
-		}
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('memfs.workspaceInit', _ => {
-		vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('memfs:/'), name: "MemFS - Sample" });
-	}));
-}
-
-async function signIn() {
-	const session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
-	console.log(session);
-	if (session !== undefined && session.accessToken !== undefined) {
-		vscode.window.showInformationMessage('Signed in as ' + session.account.label);
-		const client = new ImmyBotClient(session!.accessToken);
-		const response = await client.fetchJson<any>('/api/v1/scripts');
+		vscode.window.showInformationMessage('Fetching scripts');
 		console.log(response);
+		response.forEach((script: any) => {
+			const extension = script.scriptCategory === 11 ? '.psm1' : '.ps1';
+			const fileName = `memfs:/${ScriptCategory[script.scriptCategory]}/${script.name}${extension}`;
+			try {
+				memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(script.action), { create: true, overwrite: true });
+			} catch (e) {
+				console.error(e);
+			}
+		});
 	}
 }
+
 
 
 

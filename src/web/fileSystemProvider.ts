@@ -4,16 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 
-// Local path functions to replace 'path' module
-const posix = {
-	basename: (path: string): string => {
-		return path.split('/').pop() || '';
-	},
-	dirname: (path: string): string => {
-		return path.replace(/\/[^\/]+$/, '');
-	}
-};
-
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 export class File implements vscode.FileStat {
@@ -87,7 +78,7 @@ export class MemFS implements vscode.FileSystemProvider {
 	}
 
 	writeFile(uri: vscode.Uri, content: Uint8Array, options: { create: boolean, overwrite: boolean }): void {
-		const basename = posix.basename(uri.path);
+		const basename = path.posix.basename(uri.path);
 		const parent = this._lookupParentDirectory(uri);
 		let entry = parent.entries.get(basename);
 		if (entry instanceof Directory) {
@@ -123,7 +114,7 @@ export class MemFS implements vscode.FileSystemProvider {
 		const oldParent = this._lookupParentDirectory(oldUri);
 
 		const newParent = this._lookupParentDirectory(newUri);
-		const newName = posix.basename(newUri.path);
+		const newName = path.posix.basename(newUri.path);
 
 		oldParent.entries.delete(entry.name);
 		entry.name = newName;
@@ -136,8 +127,8 @@ export class MemFS implements vscode.FileSystemProvider {
 	}
 
 	delete(uri: vscode.Uri): void {
-		const dirname = uri.with({ path: posix.dirname(uri.path) });
-		const basename = posix.basename(uri.path);
+		const dirname = uri.with({ path: path.posix.dirname(uri.path) });
+		const basename = path.posix.basename(uri.path);
 		const parent = this._lookupAsDirectory(dirname, false);
 		if (!parent.entries.has(basename)) {
 			throw vscode.FileSystemError.FileNotFound(uri);
@@ -149,8 +140,8 @@ export class MemFS implements vscode.FileSystemProvider {
 	}
 
 	createDirectory(uri: vscode.Uri): void {
-		const basename = uri.toString().split('/').pop() || '';
-		const dirname = vscode.Uri.file(uri.toString().replace(/\/[^\/]+$/, ''));
+		const basename = path.posix.basename(uri.path);
+		const dirname = uri.with({ path: path.posix.dirname(uri.path) });
 		const parent = this._lookupAsDirectory(dirname, false);
 
 		const entry = new Directory(basename);
@@ -159,6 +150,7 @@ export class MemFS implements vscode.FileSystemProvider {
 		parent.size += 1;
 		this._fireSoon({ type: vscode.FileChangeType.Changed, uri: dirname }, { type: vscode.FileChangeType.Created, uri });
 	}
+
 	// --- lookup
 
 	private _lookup(uri: vscode.Uri, silent: false): Entry;
@@ -203,7 +195,7 @@ export class MemFS implements vscode.FileSystemProvider {
 	}
 
 	private _lookupParentDirectory(uri: vscode.Uri): Directory {
-		const dirname = uri.with({ path: posix.dirname(uri.path) });
+		const dirname = uri.with({ path: path.posix.dirname(uri.path) });
 		return this._lookupAsDirectory(dirname, false);
 	}
 
@@ -233,5 +225,3 @@ export class MemFS implements vscode.FileSystemProvider {
 		}, 5);
 	}
 }
-
-

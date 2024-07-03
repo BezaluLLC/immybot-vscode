@@ -1,6 +1,5 @@
 
 {
-  "dotnet.defaultSolution": "Immybot.Core.sln",
   // Enable the ESlint flat config support
   // (remove this if your ESLint extension above v3.0.5)
   "eslint.useFlatConfig": true,

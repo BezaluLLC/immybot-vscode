@@ -18,7 +18,8 @@
 			"outFiles": [
 				"${workspaceFolder}/dist/web/**/*.js"
 			],
-			"preLaunchTask": "npm: watch-web"
+			"preLaunchTask": "watch-web2",
+			"showAsyncStacks": true
 		},
 		{
 			"name": "Run Web Extension in Browser",
