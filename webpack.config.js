@@ -63,6 +63,7 @@ const webExtensionConfig = {
 			process: 'process/browser', // provide a shim for the global `process` variable
 			Buffer: ['buffer', 'Buffer'],
 			Path: ['path', 'Path'],
+			LanguageClient: 'vscode-languageclient/node'
 		}),
 		
 	],

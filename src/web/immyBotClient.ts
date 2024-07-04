@@ -10,7 +10,7 @@ export class ResponseError extends Error {
 	}
 }
 export class ImmyBotClient {
-	constructor(private readonly accessToken: string) { }
+	constructor() { }
 
 
 	public async fetchJson<T>(route: string, params?: RequestInit): Promise<T> {

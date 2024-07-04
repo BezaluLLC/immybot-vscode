@@ -14,7 +14,8 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onStartupFinished"
+		"onStartupFinished",
+		"onLanguage:powershell"
 	],
 	"browser": "./dist/web/extension.js",
 	"contributes": {
@@ -107,6 +108,7 @@
 		"@types/node": "^20.14.9",
 		"@types/vscode": "^1.73.0",
 		"@types/webpack-env": "^1.16.2",
+		"@types/ws": "^8.5.10",
 		"@typescript-eslint/eslint-plugin": "^6.7.0",
 		"@typescript-eslint/parser": "^6.7.0",
 		"@vscode/test-web": "^0.0.22",
@@ -119,5 +121,11 @@
 		"typescript": "^5.4.2",
 		"webpack": "^5.52.1",
 		"webpack-cli": "^4.10.0"
+	},
+	"dependencies": {
+		"monaco-languageclient": "^8.6.0",
+		"vscode-languageclient": "^9.0.1",
+		"vscode-ws-jsonrpc": "^3.3.2",
+		"ws": "^8.17.1"
 	}
 }

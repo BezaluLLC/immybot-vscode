@@ -29,6 +29,10 @@
 			"type": "npm",
 			"script": "watch-web",
 			"isBackground": true,
+			"runOptions": {
+				"instanceLimit": 1,
+				"reevaluateOnRerun": true
+			},
 			"problemMatcher": [
 				"$ts-webpack-watch",
 				"$tslint-webpack-watch"
