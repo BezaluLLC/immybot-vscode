@@ -19,6 +19,14 @@
 	],
 	"browser": "./dist/web/extension.js",
 	"contributes": {
+		"languages": [
+			{
+				"id": "metascript",
+				"extensions": [
+					".ps1",".psm1"
+				]
+			}
+		],
 		"views": {
 			"explorer": [],
 			"sideBarViewContainer": [

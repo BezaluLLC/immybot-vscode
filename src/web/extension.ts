@@ -57,7 +57,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push(
 			vscode.workspace.onDidOpenTextDocument(async (document) => {
 				if (document.uri.scheme === 'memfs') {
-					if (document.languageId === 'powershell') {
+					if (document.languageId === 'metascript') {
 						await startLanguageServerAndClient(context);
 					}
 				}
@@ -160,7 +160,7 @@ function createLanguageClient(transports: MessageTransports): MonacoLanguageClie
 		name: "ImmyBot Language Client",
 		clientOptions: {
 			// use a language id as a document selector
-			documentSelector: 				[	{ scheme: 'memfs', language: 'powershell' }]
+			documentSelector: 				[	{ scheme: 'memfs', language: 'metascript' }]
 			,
 			initializationOptions: {
 				enableProfileLoading: false,
