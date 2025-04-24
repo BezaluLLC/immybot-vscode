@@ -32,6 +32,59 @@ let initialized = false;
 let session: vscode.AuthenticationSession;
 let authOutputChannel: vscode.OutputChannel;
 
+// Class for TreeView items
+class ImmyBotTreeItem extends vscode.TreeItem {
+	constructor(
+		public readonly label: string,
+		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+		public readonly children?: ImmyBotTreeItem[]
+	) {
+		super(label, collapsibleState);
+	}
+}
+
+// TreeView provider for repositories
+class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
+	private _onDidChangeTreeData: vscode.EventEmitter<ImmyBotTreeItem | undefined | null | void> = new vscode.EventEmitter<ImmyBotTreeItem | undefined | null | void>();
+	readonly onDidChangeTreeData: vscode.Event<ImmyBotTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+	constructor(private repoType: 'local' | 'global') { }
+
+	refresh(): void {
+		this._onDidChangeTreeData.fire();
+	}
+
+	getTreeItem(element: ImmyBotTreeItem): vscode.TreeItem {
+		return element;
+	}
+
+	getChildren(element?: ImmyBotTreeItem): Thenable<ImmyBotTreeItem[]> {
+		if (element) {
+			// Return children if any
+			return Promise.resolve(element.children || []);
+		} else {
+			// Root elements based on repo type
+			if (this.repoType === 'local') {
+				return Promise.resolve([
+					new ImmyBotTreeItem('Functions', vscode.TreeItemCollapsibleState.Collapsed),
+					new ImmyBotTreeItem('Scripts', vscode.TreeItemCollapsibleState.Collapsed)
+				]);
+			} else {
+				return Promise.resolve([
+					new ImmyBotTreeItem('Community Functions', vscode.TreeItemCollapsibleState.Collapsed),
+					new ImmyBotTreeItem('Community Scripts', vscode.TreeItemCollapsibleState.Collapsed)
+				]);
+			}
+		}
+	}
+}
+
+let firstName = 'User'; // Default value
+let localRepoProvider: ImmyBotRepoProvider;
+let globalRepoProvider: ImmyBotRepoProvider;
+let localRepoView: vscode.TreeView<ImmyBotTreeItem>;
+let globalRepoView: vscode.TreeView<ImmyBotTreeItem>;
+
 // This method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
@@ -43,6 +96,31 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Create the output channel during activation
 	authOutputChannel = vscode.window.createOutputChannel("Microsoft Authentication");
 	context.subscriptions.push(authOutputChannel);
+
+	// Set up tree view providers for repositories
+	localRepoProvider = new ImmyBotRepoProvider('local');
+	globalRepoProvider = new ImmyBotRepoProvider('global');
+	
+	localRepoView = vscode.window.createTreeView('immybot-localrepo', {
+		treeDataProvider: localRepoProvider,
+		showCollapseAll: true
+	});
+	
+	globalRepoView = vscode.window.createTreeView('immybot-globalrepo', {
+		treeDataProvider: globalRepoProvider,
+		showCollapseAll: true
+	});
+	
+	context.subscriptions.push(localRepoView);
+	context.subscriptions.push(globalRepoView);
+
+	// Register command to refresh views
+	context.subscriptions.push(
+		vscode.commands.registerCommand('immybot.refreshRepos', () => {
+			localRepoProvider.refresh();
+			globalRepoProvider.refresh();
+		})
+	);
 
 	if (!initialized) {
 		try {
@@ -275,10 +353,23 @@ async function signIn() {
 							authOutputChannel.appendLine(`  - ${claim}: ${tokenData[claim]}`);
 						}
 					}
+					
+					// Get first name from name claim
+					if (tokenData.name) {
+						firstName = tokenData.name.split(' ')[0]; // Get first part of the name
+						
+						// Update tree view descriptions to show signed in user
+						localRepoView.description = `Signed in as ${firstName}`;
+						globalRepoView.description = `Signed in as ${firstName}`;
+					}
 				}
 			}
 			
 			authOutputChannel.show();
+			
+			// Set context to update sidebar visibility
+			await vscode.commands.executeCommand('setContext', 'immybot:authenticated', true);
+			
 			return true;
 		}
 		vscode.window.showWarningMessage('Sign in failed: No valid session obtained');

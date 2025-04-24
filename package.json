@@ -32,14 +32,25 @@
 			"explorer": [],
 			"sideBarViewContainer": [
 				{
-					"id": "signin",
-					"name": "Sign In"
+					"id": "immybot-signin",
+					"name": "Sign In",
+					"when": "!immybot:authenticated"
+				},
+				{
+					"id": "immybot-localrepo",
+					"name": "Local Repository",
+					"when": "immybot:authenticated"
+				},
+				{
+					"id": "immybot-globalrepo",
+					"name": "Global Repository",
+					"when": "immybot:authenticated"
 				}
 			]
 		},
 		"viewsWelcome": [
 			{
-				"view": "signin",
+				"view": "immybot-signin",
 				"contents": "Sign in to ImmyBot\n[Sign In](command:immybot.signIn)"
 			}
 		],
