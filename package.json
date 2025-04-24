@@ -38,12 +38,12 @@
 				},
 				{
 					"id": "immybot-localrepo",
-					"name": "My Scripts",
+					"name": "⭐ MY SCRIPTS ⭐",
 					"when": "immybot:authenticated"
 				},
 				{
 					"id": "immybot-globalrepo",
-					"name": "Global Scripts",
+					"name": "⭐ GLOBAL SCRIPTS ⭐",
 					"when": "immybot:authenticated"
 				}
 			]
@@ -153,7 +153,17 @@
 					"contextualTitle": "ImmyBot"
 				}
 			]
-		}
+		},
+		"cssVariables": [
+			{
+				"id": "immybot-colors",
+				"description": "ImmyBot Extension Colors",
+				"links": [{
+					"id": "colors.css",
+					"path": "./src/web/colors.css"
+				}]
+			}
+		]
 	},
 	"scripts": {
 		"test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js",

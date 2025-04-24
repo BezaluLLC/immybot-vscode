@@ -1,0 +1,19 @@
+/* Custom colors for ImmyBot extension */
+
+/* Target specifically the My Scripts and Global Scripts tree items */
+.monaco-list-row:not(.selected) .monaco-tl-row:has(.monaco-tl-twistie + .monaco-icon-label-container > .monaco-icon-label[title^="My Scripts"]) .monaco-icon-label-container .monaco-icon-name-container,
+.monaco-list-row:not(.selected) .monaco-tl-row:has(.monaco-tl-twistie + .monaco-icon-label-container > .monaco-icon-label[title^="Global Scripts"]) .monaco-icon-label-container .monaco-icon-name-container {
+    color: #FFFF00 !important; /* Bright yellow */
+}
+
+/* For dark themes, use a slightly darker yellow */
+.vscode-dark .monaco-list-row:not(.selected) .monaco-tl-row:has(.monaco-tl-twistie + .monaco-icon-label-container > .monaco-icon-label[title^="My Scripts"]) .monaco-icon-label-container .monaco-icon-name-container,
+.vscode-dark .monaco-list-row:not(.selected) .monaco-tl-row:has(.monaco-tl-twistie + .monaco-icon-label-container > .monaco-icon-label[title^="Global Scripts"]) .monaco-icon-label-container .monaco-icon-name-container {
+    color: #E2E210 !important; /* Darker yellow for better visibility on dark themes */
+}
+
+/* For high contrast themes */
+.vscode-high-contrast .monaco-list-row:not(.selected) .monaco-tl-row:has(.monaco-tl-twistie + .monaco-icon-label-container > .monaco-icon-label[title^="My Scripts"]) .monaco-icon-label-container .monaco-icon-name-container,
+.vscode-high-contrast .monaco-list-row:not(.selected) .monaco-tl-row:has(.monaco-tl-twistie + .monaco-icon-label-container > .monaco-icon-label[title^="Global Scripts"]) .monaco-icon-label-container .monaco-icon-name-container {
+    color: #FFFF00 !important; /* High contrast yellow */
+} 

@@ -32,16 +32,20 @@ let initialized = false;
 let session: vscode.AuthenticationSession;
 let authOutputChannel: vscode.OutputChannel;
 
+// Declare context at the module level
+let extensionContext: vscode.ExtensionContext;
+
 // Class for TreeView items
 class ImmyBotTreeItem extends vscode.TreeItem {
 	constructor(
-		public readonly label: string,
+		labelText: string,
 		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
 		public readonly children?: ImmyBotTreeItem[],
 		iconName?: string,
 		description?: string
 	) {
-		super(label, collapsibleState);
+		// Use the original label without decoration
+		super(labelText, collapsibleState);
 		
 		// Set description if provided
 		if (description) {
@@ -53,7 +57,7 @@ class ImmyBotTreeItem extends vscode.TreeItem {
 			this.iconPath = new vscode.ThemeIcon(iconName);
 		} else {
 			// Default icons based on item type
-			switch (label) {
+			switch (labelText) {
 				case 'My Scripts':
 				case 'Global Scripts':
 					this.iconPath = new vscode.ThemeIcon('repo');
@@ -150,6 +154,8 @@ let globalRepoView: vscode.TreeView<ImmyBotTreeItem>;
 // This method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
+	// Store the context so it can be accessed from other functions
+	extensionContext = context;
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
@@ -227,14 +233,102 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.signOut', async () => {
-			// Clear session
-			session = undefined as any;
-			
-			// Update context to hide authenticated views
-			await vscode.commands.executeCommand('setContext', 'immybot:authenticated', false);
-			
-			vscode.window.showInformationMessage('Signed out successfully');
-			authOutputChannel.appendLine('User signed out');
+			// Remove the session - need to revoke it properly
+			if (session) {
+				try {
+					// Log the session we're revoking
+					authOutputChannel.appendLine(`Signing out user: ${session.account.label}`);
+					
+					// Store the session id before we clear it
+					const sessionId = session.id;
+					const accountId = session.account.id;
+					
+					// Clear our session variable first to prevent race conditions
+					session = undefined as any;
+					
+					// Clear the in-memory filesystem
+					for (const [name] of memFs.readDirectory(vscode.Uri.parse('memfs:/'))) {
+						try {
+							memFs.delete(vscode.Uri.parse(`memfs:/${name}`));
+						} catch (e) {
+							console.error(`Error cleaning up directory ${name}:`, e);
+						}
+					}
+					
+					// Reset initialization flag
+					initialized = false;
+					
+					// Reset the authentication context to show the sign-in view
+					await vscode.commands.executeCommand('setContext', 'immybot:authenticated', false);
+					
+					// We can't use signOut directly since it's not available in the API
+					// Instead, try several approaches to ensure the session is truly cleared
+					try {
+						// 1. Clear session preference
+						await vscode.authentication.getSession('microsoft', SCOPES, { 
+							clearSessionPreference: true 
+						});
+						
+						// 2. For VS Code versions that support it, try to get all sessions and remove them
+						// This may not work in all VS Code versions, so we catch any errors
+						try {
+							// @ts-ignore - getSessions might exist in newer VS Code versions
+							const allSessions = await vscode.authentication.getSessions?.('microsoft', SCOPES);
+							if (allSessions && allSessions.length > 0) {
+								// Log how many sessions we're clearing
+								authOutputChannel.appendLine(`Found ${allSessions.length} active Microsoft sessions to clear`);
+								
+								// Try to iterate through and remove all sessions
+								for (const sess of allSessions) {
+									try {
+										// Try to use internal APIs if available for better cleanup
+										// @ts-ignore - this might exist in newer VS Code versions
+										if (vscode.authentication.removeSession && typeof vscode.authentication.removeSession === 'function') {
+											// @ts-ignore
+											await vscode.authentication.removeSession('microsoft', sess.id);
+											authOutputChannel.appendLine(`Removed session: ${sess.id}`);
+										}
+									} catch (e) {
+										// Ignore errors when removing sessions
+										console.log(`Error removing session ${sess.id}:`, e);
+									}
+								}
+							}
+						} catch (e) {
+							// Ignore errors with the getSessions API which may not be available
+							console.log('API for getSessions not available:', e);
+						}
+					} catch (error) {
+						// Ignore errors when clearing session preference
+						console.log('Error clearing sessions:', error);
+					}
+					
+					// 3. Set a flag to force new session on next sign-in
+					// Use globalState instead of workspaceState for better persistence
+					await extensionContext.globalState.update('immybot.forceNewSession', true);
+					
+					// Log the successful sign-out
+					vscode.window.showInformationMessage('Signed out successfully');
+					authOutputChannel.appendLine('User signed out successfully');
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error);
+					vscode.window.showErrorMessage(`Sign out failed: ${errorMessage}`);
+					authOutputChannel.appendLine(`Sign out failed: ${errorMessage}`);
+				}
+			} else {
+				// No active session
+				await vscode.commands.executeCommand('setContext', 'immybot:authenticated', false);
+				authOutputChannel.appendLine('Sign out: No active session found');
+				vscode.window.showInformationMessage('Signed out');
+			}
+		})
+	);
+	
+	// Register the sign-in command - this is what gets called when the user clicks "Sign In"
+	context.subscriptions.push(
+		vscode.commands.registerCommand('immybot.signIn', async () => {
+			// Only proceed with authentication when explicitly requested by user
+			await attemptSignIn(true);
 		})
 	);
 	
@@ -245,45 +339,178 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	);
 	
+	// Listen for document opens to start the language server when needed
+	context.subscriptions.push(
+		vscode.workspace.onDidOpenTextDocument(async (document) => {
+			if (document.uri.scheme === 'memfs') {
+				if (document.languageId === 'metascript') {
+					await startLanguageServerAndClient(context);
+				}
+			}
+		})
+	);
+	
+	// Register file system provider
+	registerFileSystemProvider(context);
+	
 	// Set initial editor context
 	updateEditorContext();
 
+	// Check for existing session on startup but don't prompt for authentication
 	if (!initialized) {
 		try {
-			// The command has been defined in the package.json file
-			// Now provide the implementation of the command with registerCommand
-			// The commandId parameter must match the command field in package.json
-			context.subscriptions.push(vscode.commands.registerCommand('immybot.helloWorld', () => {
-				// The code you place here will be executed every time your command is executed
-
-				// Display a message box to the user
-				vscode.window.showInformationMessage('Hello World from immybot in a web extension host!');
-			}));
-			context.subscriptions.push(
-				vscode.commands.registerCommand('immybot.signIn', async () => {
-					await signIn();
-				}));
-
-			context.subscriptions.push(
-				vscode.workspace.onDidOpenTextDocument(async (document) => {
-					if (document.uri.scheme === 'memfs') {
-						if (document.languageId === 'metascript') {
-							await startLanguageServerAndClient(context);
-						}
-					}
-				}));
-			registerFileSystemProvider(context);
-			const signedIn = await signIn();
-			if (signedIn) {
-				await fetchScripts();
+			// First check if we have the force new session flag set (from a previous sign-out)
+			const forceNewSession = extensionContext.globalState.get('immybot.forceNewSession', false);
+			
+			if (forceNewSession) {
+				// If the flag is set, we should stay signed out until the user explicitly signs in
+				authOutputChannel.appendLine('Previous sign-out detected, remaining signed out');
+				console.log('Previous sign-out detected, remaining signed out');
+				// Set the UI to show the sign-in view
+				await vscode.commands.executeCommand('setContext', 'immybot:authenticated', false);
+			} else {
+				// Only try to get an existing session if we don't have the flag set
+				// Check if we already have a valid session without prompting for auth
+				await attemptSignIn(false);
 			}
-			initialized = true;
 		} catch (error) {
 			console.error("Error during extension activation:", error);
 			vscode.window.showErrorMessage(`ImmyBot extension activation failed: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 }
+
+// Helper function to handle sign-in attempts
+async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
+	try {
+		// Check if we need to force a new session (set during sign-out)
+		// Use globalState instead of workspaceState for better persistence
+		const forceNewSession = extensionContext.globalState.get('immybot.forceNewSession', false);
+		
+		// If we're explicitly signing in and a new session is forced, use forceNewSession
+		if (promptForAuth && forceNewSession) {
+			// Clear the flag so we don't force new sessions forever
+			await extensionContext.globalState.update('immybot.forceNewSession', false);
+			
+			// Force a completely new authentication
+			session = await vscode.authentication.getSession('microsoft', SCOPES, { 
+				forceNewSession: true
+			});
+			
+			if (session) {
+				await processSuccessfulSignIn();
+				return true;
+			}
+			return false;
+		}
+		
+		// Check for existing session first
+		let existingSession: vscode.AuthenticationSession | undefined;
+		
+		try {
+			// Try to get an existing session without creating a new one
+			// Use createIfNone=false to ensure we don't auto-create a session
+			existingSession = await vscode.authentication.getSession('microsoft', SCOPES, { 
+				createIfNone: false,
+				silent: !promptForAuth // Only show UI if explicitly requested
+			});
+		} catch (e) {
+			// Ignore errors when silently checking for a session
+			if (promptForAuth) {
+				throw e; // Re-throw if we were explicitly trying to authenticate
+			}
+		}
+		
+		if (existingSession) {
+			// We have an existing valid session
+			session = existingSession;
+			await processSuccessfulSignIn();
+			return true;
+		} else if (promptForAuth) {
+			// No existing session but user clicked sign-in button, so prompt for auth
+			session = await vscode.authentication.getSession('microsoft', SCOPES, { 
+				createIfNone: true
+			});
+			
+			if (session) {
+				await processSuccessfulSignIn();
+				return true;
+			}
+		} else {
+			// No session and not prompting for auth - just show the sign-in view
+			await vscode.commands.executeCommand('setContext', 'immybot:authenticated', false);
+		}
+		
+		return false;
+	} catch (error) {
+		vscode.window.showErrorMessage(`Authentication error: ${error instanceof Error ? error.message : String(error)}`);
+		console.error("Authentication error:", error);
+		return false;
+	}
+}
+
+// Process a successful sign-in - extract user info and set up views
+async function processSuccessfulSignIn() {
+	if (!session || !session.accessToken) {
+		return false;
+	}
+	
+	vscode.window.showInformationMessage('Signed in as ' + session.account.label);
+	
+	// Use the output channel created during activation
+	authOutputChannel.appendLine(`Successfully signed in to Microsoft Authentication`);
+	authOutputChannel.appendLine(`Account ID: ${session.account.id}`);
+	authOutputChannel.appendLine(`Account Label: ${session.account.label}`);
+	authOutputChannel.appendLine(`Session ID: ${session.id}`);
+	authOutputChannel.appendLine(`Session Scopes: ${session.scopes.join(', ')}`);
+	
+	// Parse and log id token if available
+	if ('idToken' in session) {
+		const idToken = (session as any).idToken;
+		if (idToken) {
+			const tokenData = parseJwt(idToken);
+			authOutputChannel.appendLine(`\nID Token Contents:`);
+			
+			// Log useful claims
+			const claimsToDisplay = [
+				'name', 'preferred_username', 'email', 'oid', 'tid', 
+				'given_name', 'family_name', 'upn', 'unique_name', 'sub'
+			];
+			
+			for (const claim of claimsToDisplay) {
+				if (claim in tokenData) {
+					authOutputChannel.appendLine(`  - ${claim}: ${tokenData[claim]}`);
+				}
+			}
+			
+			// Get first name from name claim
+			if (tokenData.name) {
+				firstName = tokenData.name.split(' ')[0]; // Get first part of the name
+				
+				// Refresh tree views to show the signed-in user
+				localRepoProvider.refresh();
+				globalRepoProvider.refresh();
+			}
+		}
+	}
+	
+	authOutputChannel.show();
+	
+	// Set context to update sidebar visibility
+	await vscode.commands.executeCommand('setContext', 'immybot:authenticated', true);
+	
+	// Update editor context
+	updateEditorContext();
+	
+	// If not initialized, load scripts
+	if (!initialized) {
+		await fetchScripts();
+		initialized = true;
+	}
+	
+	return true;
+}
+
 function registerFileSystemProvider(context: vscode.ExtensionContext) {
 	if (initialized) {
 		return;
@@ -291,11 +518,7 @@ function registerFileSystemProvider(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.workspace.registerFileSystemProvider('memfs', memFs, { isCaseSensitive: true }));
 
 	context.subscriptions.push(vscode.commands.registerCommand('memfs.reset', async (_) => {
-		await signIn();
-		// for (const [name] of memFs.readDirectory(vscode.Uri.parse('memfs:/'))) {
-		// 	memFs.delete(vscode.Uri.parse(`memfs:/${name}`));
-		// }
-		// initialized = false;
+		await attemptSignIn(true);
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('memfs.addFile', _ => {
@@ -448,68 +671,6 @@ function parseJwt(token: string) {
 	}
 }
 
-async function signIn() {
-	try {
-		session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
-		if (session !== undefined && session.accessToken !== undefined) {
-			vscode.window.showInformationMessage('Signed in as ' + session.account.label);
-			
-			// Use the output channel created during activation
-			authOutputChannel.appendLine(`Successfully signed in to Microsoft Authentication`);
-			authOutputChannel.appendLine(`Account ID: ${session.account.id}`);
-			authOutputChannel.appendLine(`Account Label: ${session.account.label}`);
-			authOutputChannel.appendLine(`Session ID: ${session.id}`);
-			authOutputChannel.appendLine(`Session Scopes: ${session.scopes.join(', ')}`);
-			
-			// Parse and log id token if available
-			if ('idToken' in session) {
-				const idToken = (session as any).idToken;
-				if (idToken) {
-					const tokenData = parseJwt(idToken);
-					authOutputChannel.appendLine(`\nID Token Contents:`);
-					
-					// Log useful claims
-					const claimsToDisplay = [
-						'name', 'preferred_username', 'email', 'oid', 'tid', 
-						'given_name', 'family_name', 'upn', 'unique_name', 'sub'
-					];
-					
-					for (const claim of claimsToDisplay) {
-						if (claim in tokenData) {
-							authOutputChannel.appendLine(`  - ${claim}: ${tokenData[claim]}`);
-						}
-					}
-					
-					// Get first name from name claim
-					if (tokenData.name) {
-						firstName = tokenData.name.split(' ')[0]; // Get first part of the name
-						
-						// Refresh tree views to show the signed-in user
-						localRepoProvider.refresh();
-						globalRepoProvider.refresh();
-					}
-				}
-			}
-			
-			authOutputChannel.show();
-			
-			// Set context to update sidebar visibility
-			await vscode.commands.executeCommand('setContext', 'immybot:authenticated', true);
-			
-			// Update editor context
-			updateEditorContext();
-			
-			return true;
-		}
-		vscode.window.showWarningMessage('Sign in failed: No valid session obtained');
-		console.error("Sign in failed: No valid session");
-		return false;
-	} catch (error) {
-		vscode.window.showErrorMessage(`Authentication error: ${error instanceof Error ? error.message : String(error)}`);
-		console.error("Authentication error:", error);
-		return false;
-	}
-}
 async function fetchScripts() {
 	const client = new ImmyBotClient();
 	const response = await client.fetchJson<any>('/api/v1/scripts');
