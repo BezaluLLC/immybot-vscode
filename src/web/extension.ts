@@ -30,6 +30,7 @@ const SCOPES = [
 ];
 let initialized = false;
 let session: vscode.AuthenticationSession;
+let authOutputChannel: vscode.OutputChannel;
 
 // This method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -38,34 +39,45 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "immybot" is now active in the web extension host!');
+	
+	// Create the output channel during activation
+	authOutputChannel = vscode.window.createOutputChannel("Microsoft Authentication");
+	context.subscriptions.push(authOutputChannel);
 
 	if (!initialized) {
-		// The command has been defined in the package.json file
-		// Now provide the implementation of the command with registerCommand
-		// The commandId parameter must match the command field in package.json
-		context.subscriptions.push(vscode.commands.registerCommand('immybot.helloWorld', () => {
-			// The code you place here will be executed every time your command is executed
+		try {
+			// The command has been defined in the package.json file
+			// Now provide the implementation of the command with registerCommand
+			// The commandId parameter must match the command field in package.json
+			context.subscriptions.push(vscode.commands.registerCommand('immybot.helloWorld', () => {
+				// The code you place here will be executed every time your command is executed
 
-			// Display a message box to the user
-			vscode.window.showInformationMessage('Hello World from immybot in a web extension host!');
-		}));
-		context.subscriptions.push(
-			vscode.commands.registerCommand('immybot.signIn', async () => {
-				await signIn();
+				// Display a message box to the user
+				vscode.window.showInformationMessage('Hello World from immybot in a web extension host!');
 			}));
+			context.subscriptions.push(
+				vscode.commands.registerCommand('immybot.signIn', async () => {
+					await signIn();
+				}));
 
-		context.subscriptions.push(
-			vscode.workspace.onDidOpenTextDocument(async (document) => {
-				if (document.uri.scheme === 'memfs') {
-					if (document.languageId === 'metascript') {
-						await startLanguageServerAndClient(context);
+			context.subscriptions.push(
+				vscode.workspace.onDidOpenTextDocument(async (document) => {
+					if (document.uri.scheme === 'memfs') {
+						if (document.languageId === 'metascript') {
+							await startLanguageServerAndClient(context);
+						}
 					}
-				}
-			}));
-		registerFileSystemProvider(context);
-		await signIn();
-		await fetchScripts();
-		initialized = true;
+				}));
+			registerFileSystemProvider(context);
+			const signedIn = await signIn();
+			if (signedIn) {
+				await fetchScripts();
+			}
+			initialized = true;
+		} catch (error) {
+			console.error("Error during extension activation:", error);
+			vscode.window.showErrorMessage(`ImmyBot extension activation failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 }
 function registerFileSystemProvider(context: vscode.ExtensionContext) {
@@ -98,61 +110,90 @@ function registerFileSystemProvider(context: vscode.ExtensionContext) {
 }
 
 async function startLanguageServerAndClient(context: vscode.ExtensionContext) {
-	const documentSelector = [{ scheme: 'memfs', language: 'powershell' }];
-	// Options to control the language client
-	const clientOptions: LanguageClientOptions = {
-		documentSelector,
-		synchronize: {},
-		initializationOptions: {
-			enableProfileLoading: false,
-			analyzeOpenDocumentsOnly: false,
-			scriptAnalysis: {
-				enable: true,
+	try {
+		const documentSelector = [{ scheme: 'memfs', language: 'powershell' }];
+		// Options to control the language client
+		const clientOptions: LanguageClientOptions = {
+			documentSelector,
+			synchronize: {},
+			initializationOptions: {
+				enableProfileLoading: false,
+				analyzeOpenDocumentsOnly: false,
+				scriptAnalysis: {
+					enable: true,
+				},
 			},
-		},
-		progressOnInitialization: true,
-		connectionOptions: {}
-	};
-	console.log("Starting language server");
-	const terminalId = '00000000-0000-0000-0000-000000000000';
-	const startResponse = await fetch(`http://localhost:5000/api/v1/scripts/language-service/start`, {
-		body: JSON.stringify({
-			terminalId: terminalId,
-			scriptType: 1
-		}),
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-		}
-	});
-	if (!startResponse.ok) {
-		console.error(startResponse);
-		return;
-	}
-	console.log("Language server started!");
-	const ws = new WebSocket(`ws://localhost:5000/api/v1/scripts/language-service/${terminalId}/language`);
-	ws.onopen = async () => {
-		vscode.window.showInformationMessage("Language client websocket opened");
-		const socket = toSocket(ws as WebSocket);
-		const reader = new WebSocketMessageReader(socket);
-		const writer = new WebSocketMessageWriter(socket);
-
-		let languageClient = createLanguageClient({
-			reader,
-			writer,
+			progressOnInitialization: true,
+			connectionOptions: {}
+		};
+		console.log("Starting language server");
+		const terminalId = '00000000-0000-0000-0000-000000000000';
+		const startResponse = await fetch(`http://localhost:5000/api/v1/scripts/language-service/start`, {
+			body: JSON.stringify({
+				terminalId: terminalId,
+				scriptType: 1
+			}),
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			}
 		});
-		var startMessage = vscode.window.showInformationMessage("Starting language client");
+		if (!startResponse.ok) {
+			console.error("Failed to start language server:", startResponse.status, await startResponse.text());
+			return;
+		}
+		console.log("Language server started!");
+		
+		// Create a disposable for the websocket that we can add to context.subscriptions
+		const disposable = new vscode.Disposable(() => {
+			// This will be called when the extension is deactivated
+			if (ws && ws.readyState === WebSocket.OPEN) {
+				ws.close();
+			}
+		});
+		
+		const ws = new WebSocket(`ws://localhost:5000/api/v1/scripts/language-service/${terminalId}/language`);
+		
+		// Add the websocket disposable to the context
+		context.subscriptions.push(disposable);
+		
+		ws.onopen = async () => {
+			vscode.window.showInformationMessage("Language client websocket opened");
+			try {
+				const socket = toSocket(ws as WebSocket);
+				const reader = new WebSocketMessageReader(socket);
+				const writer = new WebSocketMessageWriter(socket);
 
-		try {
-			await languageClient.start();
-			vscode.window.showInformationMessage("Language client started!");
-			context.subscriptions.push(languageClient);
-		}
-		catch (error) {
-			vscode.window.showInformationMessage("Language client failed to start");
-			console.error(error);
-		}
-	};
+				let languageClient = createLanguageClient({
+					reader,
+					writer,
+				});
+				var startMessage = vscode.window.showInformationMessage("Starting language client");
+
+				try {
+					await languageClient.start();
+					vscode.window.showInformationMessage("Language client started!");
+					context.subscriptions.push(languageClient);
+				}
+				catch (error) {
+					vscode.window.showInformationMessage("Language client failed to start");
+					console.error(error);
+				}
+			} catch (error) {
+				console.error("Error in websocket onopen handler:", error);
+			}
+		};
+		
+		ws.onerror = (error) => {
+			console.error("WebSocket error:", error);
+		};
+		
+		ws.onclose = (event) => {
+			console.log("WebSocket closed:", event.code, event.reason);
+		};
+	} catch (error) {
+		console.error("Error in startLanguageServerAndClient:", error);
+	}
 }
 
 function createLanguageClient(transports: MessageTransports): MonacoLanguageClient {
@@ -186,14 +227,68 @@ function createLanguageClient(transports: MessageTransports): MonacoLanguageClie
 		},
 	});
 }
-async function signIn() {
-	session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
-	if (session !== undefined && session.accessToken !== undefined) {
-		vscode.window.showInformationMessage('Signed in as ' + session.account.label);
-		return true;
+
+// Add helper function to parse JWT
+function parseJwt(token: string) {
+	try {
+		// Base64 decoding
+		const base64Url = token.split('.')[1];
+		const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+		const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+			return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+		}).join(''));
+
+		return JSON.parse(jsonPayload);
+	} catch (e) {
+		return { error: 'Unable to parse token', message: e instanceof Error ? e.message : String(e) };
 	}
-	console.error("Sign in failed");
-	return false;
+}
+
+async function signIn() {
+	try {
+		session = await vscode.authentication.getSession('microsoft', SCOPES, { createIfNone: true });
+		if (session !== undefined && session.accessToken !== undefined) {
+			vscode.window.showInformationMessage('Signed in as ' + session.account.label);
+			
+			// Use the output channel created during activation
+			authOutputChannel.appendLine(`Successfully signed in to Microsoft Authentication`);
+			authOutputChannel.appendLine(`Account ID: ${session.account.id}`);
+			authOutputChannel.appendLine(`Account Label: ${session.account.label}`);
+			authOutputChannel.appendLine(`Session ID: ${session.id}`);
+			authOutputChannel.appendLine(`Session Scopes: ${session.scopes.join(', ')}`);
+			
+			// Parse and log id token if available
+			if ('idToken' in session) {
+				const idToken = (session as any).idToken;
+				if (idToken) {
+					const tokenData = parseJwt(idToken);
+					authOutputChannel.appendLine(`\nID Token Contents:`);
+					
+					// Log useful claims
+					const claimsToDisplay = [
+						'name', 'preferred_username', 'email', 'oid', 'tid', 
+						'given_name', 'family_name', 'upn', 'unique_name', 'sub'
+					];
+					
+					for (const claim of claimsToDisplay) {
+						if (claim in tokenData) {
+							authOutputChannel.appendLine(`  - ${claim}: ${tokenData[claim]}`);
+						}
+					}
+				}
+			}
+			
+			authOutputChannel.show();
+			return true;
+		}
+		vscode.window.showWarningMessage('Sign in failed: No valid session obtained');
+		console.error("Sign in failed: No valid session");
+		return false;
+	} catch (error) {
+		vscode.window.showErrorMessage(`Authentication error: ${error instanceof Error ? error.message : String(error)}`);
+		console.error("Authentication error:", error);
+		return false;
+	}
 }
 async function fetchScripts() {
 	const client = new ImmyBotClient();
@@ -223,15 +318,21 @@ async function fetchScripts() {
 	}
 
 	vscode.window.showInformationMessage('Fetching scripts');
-	response.forEach((script: any) => {
-		const extension = script.scriptCategory === 11 ? '.psm1' : '.ps1';
-		const fileName = `memfs:/${ScriptCategory[script.scriptCategory]}/${script.name}${extension}`;
-		try {
-			memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(script.action), { create: true, overwrite: true });
-		} catch (e) {
-			console.error(e);
-		}
-	});
+	if (response && Array.isArray(response)) {
+		response.forEach((script: any) => {
+			if (script && typeof script.scriptCategory !== 'undefined' && script.name && script.action) {
+				const extension = script.scriptCategory === 11 ? '.psm1' : '.ps1';
+				const fileName = `memfs:/${ScriptCategory[script.scriptCategory]}/${script.name}${extension}`;
+				try {
+					memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(script.action), { create: true, overwrite: true });
+				} catch (e) {
+					console.error(e);
+				}
+			}
+		});
+	} else {
+		console.error('Failed to fetch scripts or invalid response format', response);
+	}
 }
 
 

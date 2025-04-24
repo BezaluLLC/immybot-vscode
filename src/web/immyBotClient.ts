@@ -13,9 +13,12 @@ export class ImmyBotClient {
 	constructor() { }
 
 
-	public async fetchJson<T>(route: string, params?: RequestInit): Promise<T> {
+	public async fetchJson<T>(route: string, params?: RequestInit): Promise<T | null> {
 		const response = await this.fetch(route, params);
-		return await response?.json();
+		if (!response) {
+			return null;
+		}
+		return await response.json();
 	}
 	private async fetch(route: string, params: RequestInit = {}) {
 		const routeToFetch = route.startsWith('https:') ? route : `http://localhost:5000` + route;
@@ -27,16 +30,16 @@ export class ImmyBotClient {
 				try {
 					body = await response.text();
 					throw new ResponseError(response, body);
-				} catch {
+				} catch (e) {
 					body = '<unreadable>';
+					throw e;
 				}
 			}
 			return response;
 		}
 		catch (exceptionVar) {
-			console.log("error", exceptionVar)
-
-			// throw new ResponseError(exceptionVar);
+			console.log("error", exceptionVar);
+			return null;
 		}
 	}
 }
