@@ -73,11 +73,6 @@
 					"group": "navigation@3"
 				},
 				{
-					"command": "immybot.deleteFile",
-					"when": "immybot:authenticated && view == immybot-localrepo",
-					"group": "navigation@4"
-				},
-				{
 					"command": "immybot.createFile",
 					"when": "immybot:authenticated && view == immybot-localrepo",
 					"group": "overflow@1"
