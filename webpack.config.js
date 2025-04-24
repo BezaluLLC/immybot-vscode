@@ -65,7 +65,6 @@ const webExtensionConfig = {
 			Path: ['path', 'Path'],
 			LanguageClient: 'vscode-languageclient/node'
 		}),
-		
 	],
 	externals: {
 		vscode: 'commonjs vscode', // ignored because it doesn't exist
