@@ -55,6 +55,28 @@
 			}
 		],
 		"menus": {
+			"view/title": [
+				{
+					"command": "immybot.save",
+					"when": "immybot:authenticated && editorIsOpen",
+					"group": "navigation@1"
+				},
+				{
+					"command": "immybot.discard",
+					"when": "immybot:authenticated && editorIsOpen",
+					"group": "navigation@2"
+				},
+				{
+					"command": "immybot.refresh",
+					"when": "immybot:authenticated",
+					"group": "navigation@3"
+				},
+				{
+					"command": "immybot.signOut",
+					"when": "immybot:authenticated",
+					"group": "navigation@4"
+				}
+			],
 			"commandPalette": [
 				{
 					"command": "memfs.reset",
@@ -78,6 +100,26 @@
 			{
 				"command": "immybot.signIn",
 				"title": "Sign In"
+			},
+			{
+				"command": "immybot.signOut",
+				"title": "Sign Out",
+				"icon": "$(sign-out)"
+			},
+			{
+				"command": "immybot.refresh",
+				"title": "Refresh Scripts",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "immybot.save",
+				"title": "Save",
+				"icon": "$(save)"
+			},
+			{
+				"command": "immybot.discard",
+				"title": "Discard Changes",
+				"icon": "$(discard)"
 			},
 			{
 				"command": "memfs.reset",

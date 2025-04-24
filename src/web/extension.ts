@@ -38,9 +38,15 @@ class ImmyBotTreeItem extends vscode.TreeItem {
 		public readonly label: string,
 		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
 		public readonly children?: ImmyBotTreeItem[],
-		iconName?: string
+		iconName?: string,
+		description?: string
 	) {
 		super(label, collapsibleState);
+		
+		// Set description if provided
+		if (description) {
+			this.description = description;
+		}
 		
 		// Set icon path if provided
 		if (iconName) {
@@ -115,7 +121,7 @@ class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 						new ImmyBotTreeItem('Preflight', vscode.TreeItemCollapsibleState.Collapsed),
 						new ImmyBotTreeItem('Integration', vscode.TreeItemCollapsibleState.Collapsed),
 						new ImmyBotTreeItem('Deployment', vscode.TreeItemCollapsibleState.Collapsed)
-					])
+					], undefined, `Signed in as ${firstName}`)
 				]);
 			} else {
 				return Promise.resolve([
@@ -128,7 +134,7 @@ class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 						new ImmyBotTreeItem('Preflight', vscode.TreeItemCollapsibleState.Collapsed),
 						new ImmyBotTreeItem('Integration', vscode.TreeItemCollapsibleState.Collapsed),
 						new ImmyBotTreeItem('Deployment', vscode.TreeItemCollapsibleState.Collapsed)
-					])
+					], undefined, `Signed in as ${firstName}`)
 				]);
 			}
 		}
@@ -177,6 +183,70 @@ export async function activate(context: vscode.ExtensionContext) {
 			globalRepoProvider.refresh();
 		})
 	);
+	
+	// Register toolbar commands
+	context.subscriptions.push(
+		vscode.commands.registerCommand('immybot.save', async () => {
+			const editor = vscode.window.activeTextEditor;
+			if (editor) {
+				await editor.document.save();
+				vscode.window.showInformationMessage('File saved successfully');
+			}
+		})
+	);
+	
+	context.subscriptions.push(
+		vscode.commands.registerCommand('immybot.discard', () => {
+			const editor = vscode.window.activeTextEditor;
+			if (editor) {
+				vscode.commands.executeCommand('workbench.action.files.revert');
+				vscode.window.showInformationMessage('Changes discarded');
+			}
+		})
+	);
+	
+	context.subscriptions.push(
+		vscode.commands.registerCommand('immybot.refresh', async () => {
+			vscode.window.showInformationMessage('Refreshing scripts...');
+			authOutputChannel.appendLine('Refreshing scripts from ImmyBot server');
+			console.log('Refreshing scripts from ImmyBot server');
+			
+			try {
+				await fetchScripts();
+				vscode.window.showInformationMessage('Scripts refreshed successfully');
+				// Refresh the tree views
+				localRepoProvider.refresh();
+				globalRepoProvider.refresh();
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				vscode.window.showErrorMessage(`Failed to refresh scripts: ${errorMessage}`);
+				authOutputChannel.appendLine(`Error refreshing scripts: ${errorMessage}`);
+			}
+		})
+	);
+	
+	context.subscriptions.push(
+		vscode.commands.registerCommand('immybot.signOut', async () => {
+			// Clear session
+			session = undefined as any;
+			
+			// Update context to hide authenticated views
+			await vscode.commands.executeCommand('setContext', 'immybot:authenticated', false);
+			
+			vscode.window.showInformationMessage('Signed out successfully');
+			authOutputChannel.appendLine('User signed out');
+		})
+	);
+	
+	// Track when editors are opened to enable/disable buttons
+	context.subscriptions.push(
+		vscode.window.onDidChangeActiveTextEditor(() => {
+			updateEditorContext();
+		})
+	);
+	
+	// Set initial editor context
+	updateEditorContext();
 
 	if (!initialized) {
 		try {
@@ -414,9 +484,9 @@ async function signIn() {
 					if (tokenData.name) {
 						firstName = tokenData.name.split(' ')[0]; // Get first part of the name
 						
-						// Update tree view descriptions to show signed in user
-						localRepoView.description = `Signed in as ${firstName}`;
-						globalRepoView.description = `Signed in as ${firstName}`;
+						// Refresh tree views to show the signed-in user
+						localRepoProvider.refresh();
+						globalRepoProvider.refresh();
 					}
 				}
 			}
@@ -425,6 +495,9 @@ async function signIn() {
 			
 			// Set context to update sidebar visibility
 			await vscode.commands.executeCommand('setContext', 'immybot:authenticated', true);
+			
+			// Update editor context
+			updateEditorContext();
 			
 			return true;
 		}
@@ -482,8 +555,11 @@ async function fetchScripts() {
 	}
 }
 
-
-
+// Helper function to update context for editor-dependent buttons
+function updateEditorContext() {
+	const isEditorOpen = vscode.window.activeTextEditor !== undefined;
+	vscode.commands.executeCommand('setContext', 'editorIsOpen', isEditorOpen);
+}
 
 // This method is called when your extension is deactivated
 export function deactivate() {
