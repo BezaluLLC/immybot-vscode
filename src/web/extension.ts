@@ -19,6 +19,25 @@ import { MonacoLanguageClient } from "monaco-languageclient";
 
 const memFs = new MemFS();
 
+// Define script categories enum at the module level
+enum ScriptCategory {
+	SoftwareDetection,
+	SoftwareAutoUpdate,
+	SoftwareVersionAction,
+	MaintenanceTaskSetter,
+	MetascriptDeploymentTarget,
+	FilterScriptDeploymentTarget,
+	DeviceInventory,
+	Function,
+	ImmySystem,
+	DynamicVersions,
+	DownloadInstaller,
+	Module,
+	Preflight,
+	Integration,
+	Unknown
+}
+
 const CLIENT_ID = 'f72a44d4-d2d4-450e-a2db-76b307cd045f';
 const SCOPES = [
 	`VSCODE_CLIENT_ID:${CLIENT_ID}`,
@@ -227,6 +246,146 @@ export async function activate(context: vscode.ExtensionContext) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				vscode.window.showErrorMessage(`Failed to refresh scripts: ${errorMessage}`);
 				authOutputChannel.appendLine(`Error refreshing scripts: ${errorMessage}`);
+			}
+		})
+	);
+	
+	// Create file command
+	context.subscriptions.push(
+		vscode.commands.registerCommand('immybot.createFile', async () => {
+			if (!initialized) {
+				vscode.window.showErrorMessage('Please sign in first.');
+				return;
+			}
+			
+			try {
+				// Show a quick pick for the folder
+				const categories = Object.values(ScriptCategory)
+					.filter(cat => typeof cat === 'string')
+					.map(cat => String(cat));
+					
+				const selectedCategory = await vscode.window.showQuickPick(categories, {
+					placeHolder: 'Select a folder for the new file'
+				});
+				
+				if (!selectedCategory) {
+					return; // User cancelled
+				}
+				
+				// Get the file name from user
+				const fileName = await vscode.window.showInputBox({
+					prompt: 'Enter file name (without extension)',
+					placeHolder: 'MyNewScript'
+				});
+				
+				if (!fileName) {
+					return; // User cancelled
+				}
+				
+				// Determine extension based on category (modules get .psm1, others get .ps1)
+				const isModule = selectedCategory.toLowerCase() === 'module';
+				const extension = isModule ? '.psm1' : '.ps1';
+				
+				// Create the new file
+				const fileUri = vscode.Uri.parse(`memfs:/${selectedCategory}/${fileName}${extension}`);
+				
+				// Default content
+				const defaultContent = isModule ? 
+					`# ${fileName} Module\n\nfunction Get-${fileName}Info {\n    [CmdletBinding()]\n    param()\n    \n    Write-Output "Hello from ${fileName} module"\n}\n\nExport-ModuleMember -Function Get-${fileName}Info` : 
+					`# ${fileName} Script\n\n[CmdletBinding()]\nparam()\n\nWrite-Output "Hello from ${fileName} script"`;
+				
+				// Write the file
+				memFs.writeFile(fileUri, Buffer.from(defaultContent), { create: true, overwrite: false });
+				
+				// Open the file
+				const document = await vscode.workspace.openTextDocument(fileUri);
+				await vscode.window.showTextDocument(document);
+				
+				vscode.window.showInformationMessage(`Created new file: ${fileName}${extension}`);
+				
+				// Refresh the views
+				localRepoProvider.refresh();
+				globalRepoProvider.refresh();
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				vscode.window.showErrorMessage(`Failed to create file: ${errorMessage}`);
+				console.error('Error creating file:', error);
+			}
+		})
+	);
+	
+	// Delete file command
+	context.subscriptions.push(
+		vscode.commands.registerCommand('immybot.deleteFile', async () => {
+			if (!initialized) {
+				vscode.window.showErrorMessage('Please sign in first.');
+				return;
+			}
+			
+			try {
+				// Build a list of files to choose from
+				const categories = Object.values(ScriptCategory)
+					.filter(cat => typeof cat === 'string')
+					.map(cat => String(cat));
+				
+				const files: { label: string; uri: vscode.Uri }[] = [];
+				
+				// Collect files from all categories
+				for (const category of categories) {
+					try {
+						const dirUri = vscode.Uri.parse(`memfs:/${category}`);
+						const dirEntries = memFs.readDirectory(dirUri);
+						
+						for (const [name, type] of dirEntries) {
+							if (type === vscode.FileType.File) {
+								files.push({
+									label: `${category}/${name}`,
+									uri: vscode.Uri.parse(`memfs:/${category}/${name}`)
+								});
+							}
+						}
+					} catch (e) {
+						// Ignore errors for categories that might not exist
+					}
+				}
+				
+				if (files.length === 0) {
+					vscode.window.showInformationMessage('No files found to delete.');
+					return;
+				}
+				
+				// Show quick pick with all files
+				const selectedFile = await vscode.window.showQuickPick(files, {
+					placeHolder: 'Select a file to delete'
+				});
+				
+				if (!selectedFile) {
+					return; // User cancelled
+				}
+				
+				// Confirm deletion
+				const confirmation = await vscode.window.showWarningMessage(
+					`Are you sure you want to delete ${selectedFile.label}?`,
+					{ modal: true },
+					'Delete'
+				);
+				
+				if (confirmation !== 'Delete') {
+					return; // User cancelled
+				}
+				
+				// Delete the file
+				memFs.delete(selectedFile.uri);
+				
+				vscode.window.showInformationMessage(`Deleted file: ${selectedFile.label}`);
+				
+				// Refresh the views
+				localRepoProvider.refresh();
+				globalRepoProvider.refresh();
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				vscode.window.showErrorMessage(`Failed to delete file: ${errorMessage}`);
+				console.error('Error deleting file:', error);
 			}
 		})
 	);
@@ -674,23 +833,6 @@ function parseJwt(token: string) {
 async function fetchScripts() {
 	const client = new ImmyBotClient();
 	const response = await client.fetchJson<any>('/api/v1/scripts');
-	enum ScriptCategory {
-		SoftwareDetection,
-		SoftwareAutoUpdate,
-		SoftwareVersionAction,
-		MaintenanceTaskSetter,
-		MetascriptDeploymentTarget,
-		FilterScriptDeploymentTarget,
-		DeviceInventory,
-		Function,
-		ImmySystem,
-		DynamicVersions,
-		DownloadInstaller,
-		Module,
-		Preflight,
-		Integration,
-		Unknown
-	}
 
 	for (const category of Object.values(ScriptCategory)) {
 		if (typeof category === 'string') {

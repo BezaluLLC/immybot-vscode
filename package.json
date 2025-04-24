@@ -58,25 +58,55 @@
 		"menus": {
 			"view/title": [
 				{
-					"command": "immybot.save",
-					"when": "immybot:authenticated && editorIsOpen",
+					"command": "immybot.refresh",
+					"when": "immybot:authenticated",
 					"group": "navigation@1"
 				},
 				{
-					"command": "immybot.discard",
+					"command": "immybot.save",
 					"when": "immybot:authenticated && editorIsOpen",
 					"group": "navigation@2"
 				},
 				{
-					"command": "immybot.refresh",
-					"when": "immybot:authenticated",
+					"command": "immybot.discard",
+					"when": "immybot:authenticated && editorIsOpen",
 					"group": "navigation@3"
 				},
 				{
-					"command": "immybot.signOut",
-					"when": "immybot:authenticated",
+					"command": "immybot.deleteFile",
+					"when": "immybot:authenticated && view == immybot-localrepo",
 					"group": "navigation@4"
-				}
+				},
+				{
+					"command": "immybot.createFile",
+					"when": "immybot:authenticated && view == immybot-localrepo",
+					"group": "overflow@1"
+				},
+				{
+					"command": "immybot.createFile",
+					"when": "immybot:authenticated && view == immybot-globalrepo",
+					"group": "overflow@1"
+				},
+				{
+					"command": "immybot.deleteFile",
+					"when": "immybot:authenticated && view == immybot-localrepo",
+					"group": "overflow@2"
+				},
+				{
+					"command": "immybot.deleteFile",
+					"when": "immybot:authenticated && view == immybot-globalrepo",
+					"group": "overflow@2"
+				},
+				{
+					"command": "immybot.signOut",
+					"when": "immybot:authenticated && view == immybot-localrepo",
+					"group": "overflow@3"
+				},
+				{
+					"command": "immybot.signOut",
+					"when": "immybot:authenticated && view == immybot-globalrepo",
+					"group": "overflow@3"
+				}				
 			],
 			"commandPalette": [
 				{
@@ -121,6 +151,16 @@
 				"command": "immybot.discard",
 				"title": "Discard Changes",
 				"icon": "$(discard)"
+			},
+			{
+				"command": "immybot.createFile",
+				"title": "Create File",
+				"icon": "$(add)"
+			},
+			{
+				"command": "immybot.deleteFile",
+				"title": "Delete File",
+				"icon": "$(trash)"
 			},
 			{
 				"command": "memfs.reset",
