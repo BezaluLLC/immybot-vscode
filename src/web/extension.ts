@@ -37,9 +37,49 @@ class ImmyBotTreeItem extends vscode.TreeItem {
 	constructor(
 		public readonly label: string,
 		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-		public readonly children?: ImmyBotTreeItem[]
+		public readonly children?: ImmyBotTreeItem[],
+		iconName?: string
 	) {
 		super(label, collapsibleState);
+		
+		// Set icon path if provided
+		if (iconName) {
+			this.iconPath = new vscode.ThemeIcon(iconName);
+		} else {
+			// Default icons based on item type
+			switch (label) {
+				case 'My Scripts':
+				case 'Global Scripts':
+					this.iconPath = new vscode.ThemeIcon('repo');
+					break;
+				case 'Modules':
+					this.iconPath = new vscode.ThemeIcon('package');
+					break;
+				case 'Functions':
+					this.iconPath = new vscode.ThemeIcon('symbol-method');
+					break;
+				case 'Software':
+					this.iconPath = new vscode.ThemeIcon('desktop-download');
+					break;
+				case 'Task':
+					this.iconPath = new vscode.ThemeIcon('tasklist');
+					break;
+				case 'Inventory':
+					this.iconPath = new vscode.ThemeIcon('database');
+					break;
+				case 'Preflight':
+					this.iconPath = new vscode.ThemeIcon('checklist');
+					break;
+				case 'Integration':
+					this.iconPath = new vscode.ThemeIcon('plug');
+					break;
+				case 'Deployment':
+					this.iconPath = new vscode.ThemeIcon('rocket');
+					break;
+				default:
+					this.iconPath = new vscode.ThemeIcon('file');
+			}
+		}
 	}
 }
 
@@ -66,13 +106,29 @@ class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 			// Root elements based on repo type
 			if (this.repoType === 'local') {
 				return Promise.resolve([
-					new ImmyBotTreeItem('Functions', vscode.TreeItemCollapsibleState.Collapsed),
-					new ImmyBotTreeItem('Scripts', vscode.TreeItemCollapsibleState.Collapsed)
+					new ImmyBotTreeItem('My Scripts', vscode.TreeItemCollapsibleState.Expanded, [
+						new ImmyBotTreeItem('Modules', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Functions', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Software', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Task', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Inventory', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Preflight', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Integration', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Deployment', vscode.TreeItemCollapsibleState.Collapsed)
+					])
 				]);
 			} else {
 				return Promise.resolve([
-					new ImmyBotTreeItem('Community Functions', vscode.TreeItemCollapsibleState.Collapsed),
-					new ImmyBotTreeItem('Community Scripts', vscode.TreeItemCollapsibleState.Collapsed)
+					new ImmyBotTreeItem('Global Scripts', vscode.TreeItemCollapsibleState.Expanded, [
+						new ImmyBotTreeItem('Modules', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Functions', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Software', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Task', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Inventory', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Preflight', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Integration', vscode.TreeItemCollapsibleState.Collapsed),
+						new ImmyBotTreeItem('Deployment', vscode.TreeItemCollapsibleState.Collapsed)
+					])
 				]);
 			}
 		}

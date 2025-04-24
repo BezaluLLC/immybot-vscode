@@ -38,12 +38,12 @@
 				},
 				{
 					"id": "immybot-localrepo",
-					"name": "Local Repository",
+					"name": "My Scripts",
 					"when": "immybot:authenticated"
 				},
 				{
 					"id": "immybot-globalrepo",
-					"name": "Global Repository",
+					"name": "Global Scripts",
 					"when": "immybot:authenticated"
 				}
 			]
