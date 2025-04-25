@@ -142,6 +142,74 @@ class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 					new ImmyBotTreeItem('Filter', vscode.TreeItemCollapsibleState.Collapsed),
 					new ImmyBotTreeItem('Metascript', vscode.TreeItemCollapsibleState.Collapsed)
 				]);
+			} else if (element.label === 'Detection' || 
+				element.label === 'Download' || 
+				element.label === 'Dynamic Version' || 
+				element.label === 'Action (Install|Uninstall|Upgrade)' ||
+				element.label === 'Filter' ||
+				element.label === 'Metascript' ||
+				element.label === 'Functions' ||
+				element.label === 'Modules' ||
+				element.label === 'Task' ||
+				element.label === 'Inventory' ||
+				element.label === 'Preflight' ||
+				element.label === 'Integration' ||
+				element.label === 'System'
+			) {
+				// For leaf categories, list files from the corresponding directory
+				try {
+					const rootFolder = this.repoType === 'local' ? 'My Scripts' : 'Global Scripts';
+					let parentFolder = '';
+					let dirPath = '';
+					
+					// Find the parent of this node to determine the full path
+					if (element.label === 'Detection' || 
+						element.label === 'Download' || 
+						element.label === 'Dynamic Version' || 
+						element.label === 'Action (Install|Uninstall|Upgrade)') {
+						parentFolder = 'Software';
+					} else if (element.label === 'Filter' || element.label === 'Metascript') {
+						parentFolder = 'Deployment';
+					} else {
+						// Top-level folders
+						parentFolder = '';
+					}
+					
+					// Construct the directory path
+					if (parentFolder) {
+						dirPath = `memfs:/${rootFolder}/${parentFolder}/${element.label}`;
+					} else {
+						dirPath = `memfs:/${rootFolder}/${element.label}`;
+					}
+					
+					const dirUri = vscode.Uri.parse(dirPath);
+					const dirEntries = memFs.readDirectory(dirUri);
+					const fileItems: ImmyBotTreeItem[] = [];
+					
+					for (const [name, type] of dirEntries) {
+						if (type === vscode.FileType.File) {
+							const fileUri = vscode.Uri.parse(`${dirPath}/${name}`);
+							const fileItem = new ImmyBotTreeItem(name, vscode.TreeItemCollapsibleState.None);
+							fileItem.resourceUri = fileUri;
+							fileItem.command = {
+								command: 'vscode.open',
+								arguments: [fileUri],
+								title: 'Open File'
+							};
+							fileItems.push(fileItem);
+						}
+					}
+					
+					// Sort files alphabetically
+					fileItems.sort((a, b) => {
+						return a.label!.toString().localeCompare(b.label!.toString());
+					});
+					
+					return Promise.resolve(fileItems);
+				} catch (e) {
+					console.error('Error listing files:', e);
+					return Promise.resolve([]);
+				}
 			}
 			return Promise.resolve(element.children || []);
 		} else {
@@ -272,12 +340,63 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 			
 			try {
+				// First, choose Script Type: Local or Global
+				const scriptTypeOptions = [
+					{ label: 'Local Script', description: 'Tenant-specific script', value: 1 },
+					{ label: 'Global Script', description: 'Shared across tenants', value: 2 }
+				];
+				
+				const selectedScriptType = await vscode.window.showQuickPick(scriptTypeOptions, {
+					placeHolder: 'Select Script Type'
+				});
+				
+				if (!selectedScriptType) {
+					return; // User cancelled
+				}
+				
+				// Next, choose Script Language
+				const scriptLanguageOptions = [
+					{ label: 'Command Line', description: 'Command Line script', value: 1 },
+					{ label: 'PowerShell', description: 'PowerShell script', value: 2 }
+				];
+				
+				const selectedLanguage = await vscode.window.showQuickPick(scriptLanguageOptions, {
+					placeHolder: 'Select Script Language'
+				});
+				
+				if (!selectedLanguage) {
+					return; // User cancelled
+				}
+				
+				// Then, choose Execution Context
+				const executionContextOptions = [
+					{ label: 'System', description: 'System execution context', value: 0 },
+					{ label: 'User', description: 'User execution context', value: 1 },
+					{ label: 'Metascript', description: 'Metascript execution context', value: 2 },
+					{ label: 'CloudScript', description: 'CloudScript execution context', value: 4 }
+				];
+				
+				const selectedExecutionContext = await vscode.window.showQuickPick(executionContextOptions, {
+					placeHolder: 'Select Execution Context'
+				});
+				
+				if (!selectedExecutionContext) {
+					return; // User cancelled
+				}
+				
 				// Top-level categories first
-				const mainCategories = Object.values(ScriptCategory)
-					.filter(cat => typeof cat === 'string')
-					.map(cat => String(cat));
+				const scriptCategoryOptions = [
+					{ label: 'Modules', description: 'PowerShell module scripts', value: 11, dataType: 'Module' },
+					{ label: 'Functions', description: 'Function scripts', value: 7, dataType: 'Function' },
+					{ label: 'Software', description: 'Software-related scripts', value: -1, dataType: 'Software' },
+					{ label: 'Task', description: 'Maintenance task scripts', value: 3, dataType: 'MaintenanceTaskSetter' },
+					{ label: 'Inventory', description: 'Device inventory scripts', value: 6, dataType: 'DeviceInventory' },
+					{ label: 'Preflight', description: 'Preflight scripts', value: 12, dataType: 'Preflight' },
+					{ label: 'Integration', description: 'Integration scripts', value: 13, dataType: 'Integration' },
+					{ label: 'Deployment', description: 'Deployment-related scripts', value: -2, dataType: 'Deployment' }
+				];
 					
-				const selectedMainCategory = await vscode.window.showQuickPick(mainCategories, {
+				const selectedMainCategory = await vscode.window.showQuickPick(scriptCategoryOptions, {
 					placeHolder: 'Select a main category'
 				});
 				
@@ -287,10 +406,15 @@ export async function activate(context: vscode.ExtensionContext) {
 				
 				// Handle subcategories for Software and Deployment
 				let selectedSubCategory = selectedMainCategory;
-				let folderPath = selectedMainCategory;
 				
-				if (selectedMainCategory === 'Software') {
-					const softwareSubCategories = ['Detection', 'Download', 'Dynamic Version', 'Action (Install|Uninstall|Upgrade)'];
+				if (selectedMainCategory.value === -1) { // Software
+					const softwareSubCategories = [
+						{ label: 'Detection', description: 'Software detection scripts', value: 0, dataType: 'SoftwareDetection' },
+						{ label: 'Download', description: 'Installer download scripts', value: 10, dataType: 'DownloadInstaller' },
+						{ label: 'Dynamic Version', description: 'Dynamic version scripts', value: 9, dataType: 'DynamicVersions' },
+						{ label: 'Action (Install|Uninstall|Upgrade)', description: 'Software action scripts', value: 2, dataType: 'SoftwareVersionAction' }
+					];
+					
 					const selectedSoftwareSubCategory = await vscode.window.showQuickPick(softwareSubCategories, {
 						placeHolder: 'Select a software subcategory'
 					});
@@ -299,24 +423,13 @@ export async function activate(context: vscode.ExtensionContext) {
 						return; // User cancelled
 					}
 					
-					// Map UI-friendly names to filesystem folder names
-					switch (selectedSoftwareSubCategory) {
-						case 'Detection':
-							folderPath = 'SoftwareDetection';
-							break;
-						case 'Download':
-							folderPath = 'DownloadInstaller';
-							break;
-						case 'Dynamic Version':
-							folderPath = 'DynamicVersions';
-							break;
-						case 'Action (Install|Uninstall|Upgrade)':
-							folderPath = 'SoftwareVersionAction';
-							break;
-					}
 					selectedSubCategory = selectedSoftwareSubCategory;
-				} else if (selectedMainCategory === 'Deployment') {
-					const deploymentSubCategories = ['Filter', 'Metascript'];
+				} else if (selectedMainCategory.value === -2) { // Deployment
+					const deploymentSubCategories = [
+						{ label: 'Filter', description: 'Deployment filter scripts', value: 5, dataType: 'FilterScriptDeploymentTarget' },
+						{ label: 'Metascript', description: 'Deployment metascript', value: 4, dataType: 'MetascriptDeploymentTarget' }
+					];
+					
 					const selectedDeploymentSubCategory = await vscode.window.showQuickPick(deploymentSubCategories, {
 						placeHolder: 'Select a deployment subcategory'
 					});
@@ -325,21 +438,12 @@ export async function activate(context: vscode.ExtensionContext) {
 						return; // User cancelled
 					}
 					
-					// Map UI-friendly names to filesystem folder names
-					switch (selectedDeploymentSubCategory) {
-						case 'Filter':
-							folderPath = 'FilterScriptDeploymentTarget';
-							break;
-						case 'Metascript':
-							folderPath = 'MetascriptDeploymentTarget';
-							break;
-					}
 					selectedSubCategory = selectedDeploymentSubCategory;
 				}
 				
 				// Get the file name from user
 				const fileName = await vscode.window.showInputBox({
-					prompt: `Enter file name for ${selectedSubCategory} (without extension)`,
+					prompt: `Enter file name for ${selectedSubCategory.label} (without extension)`,
 					placeHolder: 'MyNewScript'
 				});
 				
@@ -347,36 +451,126 @@ export async function activate(context: vscode.ExtensionContext) {
 					return; // User cancelled
 				}
 				
-				// Determine extension based on category (modules get .psm1, others get .ps1)
-				const isModule = selectedMainCategory.toLowerCase() === 'module';
-				const extension = isModule ? '.psm1' : '.ps1';
+				// Determine extension based on language (PowerShell .ps1 or .psm1 for modules, .cmd for command line)
+				const isModule = selectedSubCategory.value === 11; // Module category
+				let extension = '';
+				
+				if (selectedLanguage.value === 2) { // PowerShell
+					extension = isModule ? '.psm1' : '.ps1';
+				} else {
+					extension = '.cmd';
+				}
 				
 				// Create the new file
-				const fileUri = vscode.Uri.parse(`memfs:/${folderPath}/${fileName}${extension}`);
+				let fileUri;
+				const rootFolder = selectedScriptType.value === 1 ? 'My Scripts' : 'Global Scripts';
 				
-				// Default content based on category
-				let defaultContent = '';
+				// Create the full folder path based on the category
+				let folderPath = '';
 				
-				if (isModule) {
-					defaultContent = `# ${fileName} Module\n\nfunction Get-${fileName}Info {\n    [CmdletBinding()]\n    param()\n    \n    Write-Output "Hello from ${fileName} module"\n}\n\nExport-ModuleMember -Function Get-${fileName}Info`;
-				} else if (selectedMainCategory === 'Software') {
-					if (selectedSubCategory === 'Detection') {
-						defaultContent = `# ${fileName} Software Detection Script\n\n[CmdletBinding()]\nparam()\n\n# Return detection status (0 = Not Installed, 1 = Installed, 2 = Needs Update)\nReturn 0`;
-					} else if (selectedSubCategory === 'Download') {
-						defaultContent = `# ${fileName} Download Script\n\n[CmdletBinding()]\nparam()\n\n# Return download URL for the installer\nReturn "https://example.com/${fileName}.exe"`;
-					} else if (selectedSubCategory === 'Dynamic Version') {
-						defaultContent = `# ${fileName} Dynamic Version Script\n\n[CmdletBinding()]\nparam()\n\n# Return latest version number\nReturn "1.0.0"`;
-					} else {
-						defaultContent = `# ${fileName} Software Action Script\n\n[CmdletBinding()]\nparam()\n\n# Installation logic here\nWrite-Output "Installing ${fileName}"`;
+				if (selectedMainCategory.value === -1) { // Software
+					switch (selectedSubCategory.value) {
+						case 0: // Detection
+							folderPath = `${rootFolder}/Software/Detection`;
+							break;
+						case 10: // Download
+							folderPath = `${rootFolder}/Software/Download`;
+							break;
+						case 9: // Dynamic Version
+							folderPath = `${rootFolder}/Software/Dynamic Version`;
+							break;
+						case 2: // Action
+							folderPath = `${rootFolder}/Software/Action (Install|Uninstall|Upgrade)`;
+							break;
+						default:
+							folderPath = `${rootFolder}/Software`;
 					}
-				} else if (selectedMainCategory === 'Deployment') {
-					if (selectedSubCategory === 'Filter') {
-						defaultContent = `# ${fileName} Deployment Filter Script\n\n[CmdletBinding()]\nparam()\n\n# Return true to include device, false to exclude\nReturn $true`;
-					} else {
-						defaultContent = `# ${fileName} Deployment Metascript\n\n[CmdletBinding()]\nparam()\n\n# Deployment logic here\nWrite-Output "Deploying ${fileName}"`;
+				} else if (selectedMainCategory.value === -2) { // Deployment
+					switch (selectedSubCategory.value) {
+						case 5: // Filter
+							folderPath = `${rootFolder}/Deployment/Filter`;
+							break;
+						case 4: // Metascript
+							folderPath = `${rootFolder}/Deployment/Metascript`;
+							break;
+						default:
+							folderPath = `${rootFolder}/Deployment`;
 					}
 				} else {
-					defaultContent = `# ${fileName} Script\n\n[CmdletBinding()]\nparam()\n\nWrite-Output "Hello from ${fileName} script"`;
+					// Map main categories to folder paths
+					switch (selectedSubCategory.value) {
+						case 7: // Function
+							folderPath = `${rootFolder}/Functions`;
+							break;
+						case 11: // Module
+							folderPath = `${rootFolder}/Modules`;
+							break;
+						case 3: // MaintenanceTaskSetter
+							folderPath = `${rootFolder}/Task`;
+							break;
+						case 6: // DeviceInventory
+							folderPath = `${rootFolder}/Inventory`;
+							break;
+						case 12: // Preflight
+							folderPath = `${rootFolder}/Preflight`;
+							break;
+						case 13: // Integration
+							folderPath = `${rootFolder}/Integration`;
+							break;
+						default:
+							folderPath = `${rootFolder}/${selectedSubCategory.dataType}`;
+					}
+				}
+				
+				fileUri = vscode.Uri.parse(`memfs:/${folderPath}/${fileName}${extension}`);
+				
+				// Get user email if available or username from session
+				const userEmail = session?.account?.label || 'Unknown User';
+				
+				// Current date in UTC format
+				const currentDate = new Date().toISOString();
+				
+				// Default content based on category with metadata
+				let defaultContent = '';
+				
+				// Add metadata header
+				defaultContent += `<#\n`;
+				defaultContent += `METADATA\n`;
+				defaultContent += `ScriptType: ${selectedScriptType.value} (${selectedScriptType.label})\n`;
+				defaultContent += `ScriptCategory: ${selectedSubCategory.value} (${selectedSubCategory.label})\n`;
+				defaultContent += `ExecutionContext: ${selectedExecutionContext.value} (${selectedExecutionContext.label})\n`;
+				defaultContent += `Language: ${selectedLanguage.value} (${selectedLanguage.label})\n`;
+				defaultContent += `CreatedBy: ${userEmail}\n`;
+				defaultContent += `CreatedDate: ${currentDate}\n`;
+				defaultContent += `#>\n\n`;
+				
+				// Add script content based on category
+				if (isModule) {
+					defaultContent += `# ${fileName} Module\n\nfunction Get-${fileName}Info {\n    [CmdletBinding()]\n    param()\n    \n    Write-Output "Hello from ${fileName} module"\n}\n\nExport-ModuleMember -Function Get-${fileName}Info`;
+				} else if (selectedSubCategory.value === 0) { // SoftwareDetection
+					defaultContent += `# ${fileName} Software Detection Script\n\n[CmdletBinding()]\nparam()\n\n# Return detection status (0 = Not Installed, 1 = Installed, 2 = Needs Update)\nReturn 0`;
+				} else if (selectedSubCategory.value === 10) { // DownloadInstaller
+					defaultContent += `# ${fileName} Download Script\n\n[CmdletBinding()]\nparam()\n\n# Return download URL for the installer\nReturn "https://example.com/${fileName}.exe"`;
+				} else if (selectedSubCategory.value === 9) { // DynamicVersions
+					defaultContent += `# ${fileName} Dynamic Version Script\n\n[CmdletBinding()]\nparam()\n\n# Return latest version number\nReturn "1.0.0"`;
+				} else if (selectedSubCategory.value === 2) { // SoftwareVersionAction
+					defaultContent += `# ${fileName} Software Action Script\n\n[CmdletBinding()]\nparam()\n\n# Installation logic here\nWrite-Output "Installing ${fileName}"`;
+				} else if (selectedSubCategory.value === 5) { // FilterScriptDeploymentTarget
+					defaultContent += `# ${fileName} Deployment Filter Script\n\n[CmdletBinding()]\nparam()\n\n# Return true to include device, false to exclude\nReturn $true`;
+				} else if (selectedSubCategory.value === 4) { // MetascriptDeploymentTarget
+					defaultContent += `# ${fileName} Deployment Metascript\n\n[CmdletBinding()]\nparam()\n\n# Deployment logic here\nWrite-Output "Deploying ${fileName}"`;
+				} else if (selectedSubCategory.value === 7) { // Function
+					defaultContent += `# ${fileName} Function\n\nfunction ${fileName} {\n    [CmdletBinding()]\n    param()\n    \n    Write-Output "Executing ${fileName} function"\n}\n\n# Export the function\n${fileName}`;
+				} else if (selectedSubCategory.value === 6) { // DeviceInventory
+					defaultContent += `# ${fileName} Device Inventory Script\n\n[CmdletBinding()]\nparam()\n\n# Return inventory data\n@{\n    Name = "${fileName}"\n    Value = "Sample inventory data"\n}`;
+				} else if (selectedSubCategory.value === 12) { // Preflight
+					defaultContent += `# ${fileName} Preflight Script\n\n[CmdletBinding()]\nparam()\n\n# Preflight check logic\n$result = $true\n\n# Return true if preflight check passes, false otherwise\nReturn $result`;
+				} else if (selectedSubCategory.value === 13) { // Integration
+					defaultContent += `# ${fileName} Integration Script\n\n[CmdletBinding()]\nparam()\n\n# Integration logic\nWrite-Output "Executing ${fileName} integration script"`;
+				} else if (selectedSubCategory.value === 3) { // MaintenanceTaskSetter
+					defaultContent += `# ${fileName} Maintenance Task Script\n\n[CmdletBinding()]\nparam()\n\n# Task logic\nWrite-Output "Executing ${fileName} maintenance task"`;
+				} else {
+					defaultContent += `# ${fileName} Script\n\n[CmdletBinding()]\nparam()\n\nWrite-Output "Hello from ${fileName} script"`;
 				}
 				
 				// Write the file
@@ -408,79 +602,93 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 			
 			try {
-				// Build a list of all directories to scan
-				const mainCategoryFolders = Object.values(ScriptCategory)
-					.filter(cat => typeof cat === 'string')
-					.map(cat => String(cat));
-					
-				// Add software subfolder paths
-				const softwareSubfolders = [
-					'SoftwareDetection',
-					'SoftwareAutoUpdate',
-					'SoftwareVersionAction',
-					'DynamicVersions',
-					'DownloadInstaller'
+				// Build a list of directories to scan with the new structure
+				const rootFolders = ['My Scripts', 'Global Scripts'];
+				const subFolders = [
+					'Functions',
+					'Modules',
+					'Software',
+					'Task',
+					'Inventory',
+					'Preflight',
+					'Integration',
+					'Deployment',
+					'System',
+					'Unknown'
 				];
 				
-				// Add deployment subfolder paths
-				const deploymentSubfolders = [
-					'FilterScriptDeploymentTarget',
-					'MetascriptDeploymentTarget'
+				const softwareSubFolders = [
+					'Detection',
+					'Download',
+					'Dynamic Version',
+					'Action (Install|Uninstall|Upgrade)'
 				];
 				
-				// Combine all folder paths
-				const allFolders = [
-					...mainCategoryFolders,
-					...softwareSubfolders,
-					...deploymentSubfolders
+				const deploymentSubFolders = [
+					'Filter',
+					'Metascript'
 				];
 				
 				const files: { label: string; uri: vscode.Uri }[] = [];
 				
-				// Collect files from all directories
-				for (const folder of allFolders) {
-					try {
-						const dirUri = vscode.Uri.parse(`memfs:/${folder}`);
-						const dirEntries = memFs.readDirectory(dirUri);
-						
-						for (const [name, type] of dirEntries) {
-							if (type === vscode.FileType.File) {
-								// Create a user-friendly label for the file
-								let displayFolder = folder;
-								
-								// Map filesystem paths to user-friendly names
-								switch (folder) {
-									case 'SoftwareDetection':
-										displayFolder = 'Software/Detection';
-										break;
-									case 'SoftwareAutoUpdate':
-										displayFolder = 'Software/Auto Update';
-										break;
-									case 'SoftwareVersionAction':
-										displayFolder = 'Software/Action';
-										break;
-									case 'DynamicVersions':
-										displayFolder = 'Software/Dynamic Version';
-										break;
-									case 'DownloadInstaller':
-										displayFolder = 'Software/Download';
-										break;
-									case 'FilterScriptDeploymentTarget':
-										displayFolder = 'Deployment/Filter';
-										break;
-									case 'MetascriptDeploymentTarget':
-										displayFolder = 'Deployment/Metascript';
-										break;
+				// Scan all directories in the new structure
+				for (const rootFolder of rootFolders) {
+					for (const subFolder of subFolders) {
+						// Special handling for Software and Deployment which have subfolders
+						if (subFolder === 'Software') {
+							for (const softwareSubFolder of softwareSubFolders) {
+								try {
+									const dirUri = vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}/${softwareSubFolder}`);
+									const dirEntries = memFs.readDirectory(dirUri);
+									
+									for (const [name, type] of dirEntries) {
+										if (type === vscode.FileType.File) {
+											files.push({
+												label: `${rootFolder}/${subFolder}/${softwareSubFolder}/${name}`,
+												uri: vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}/${softwareSubFolder}/${name}`)
+											});
+										}
+									}
+								} catch (e) {
+									// Ignore errors for directories that might not exist
 								}
+							}
+						} else if (subFolder === 'Deployment') {
+							for (const deploymentSubFolder of deploymentSubFolders) {
+								try {
+									const dirUri = vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}/${deploymentSubFolder}`);
+									const dirEntries = memFs.readDirectory(dirUri);
+									
+									for (const [name, type] of dirEntries) {
+										if (type === vscode.FileType.File) {
+											files.push({
+												label: `${rootFolder}/${subFolder}/${deploymentSubFolder}/${name}`,
+												uri: vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}/${deploymentSubFolder}/${name}`)
+											});
+										}
+									}
+								} catch (e) {
+									// Ignore errors for directories that might not exist
+								}
+							}
+						} else {
+							// Regular directory
+							try {
+								const dirUri = vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}`);
+								const dirEntries = memFs.readDirectory(dirUri);
 								
-								files.push({
-									label: `${displayFolder}/${name}`,
-									uri: vscode.Uri.parse(`memfs:/${folder}/${name}`)
-								});
+								for (const [name, type] of dirEntries) {
+									if (type === vscode.FileType.File) {
+										files.push({
+											label: `${rootFolder}/${subFolder}/${name}`,
+											uri: vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}/${name}`)
+										});
+									}
+								}
+							} catch (e) {
+								// Ignore errors for directories that might not exist
 							}
 						}
-					} catch (e) {
-						// Ignore errors for directories that might not exist
 					}
 				}
 				
@@ -969,60 +1177,148 @@ async function fetchScripts() {
 	const client = new ImmyBotClient();
 	const response = await client.fetchJson<any>('/api/v1/scripts');
 
-	// Create root categories
-	for (const category of Object.values(ScriptCategory)) {
-		if (typeof category === 'string') {
-			memFs.createDirectory(vscode.Uri.parse(`memfs:/${category}`));
-		}
-	}
+	// Create top-level directories for Local and Global scripts
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts'));
 
-	// Create subcategories for Software
-	memFs.createDirectory(vscode.Uri.parse('memfs:/SoftwareDetection'));
-	memFs.createDirectory(vscode.Uri.parse('memfs:/SoftwareAutoUpdate'));
-	memFs.createDirectory(vscode.Uri.parse('memfs:/SoftwareVersionAction'));
-	memFs.createDirectory(vscode.Uri.parse('memfs:/DynamicVersions'));
-	memFs.createDirectory(vscode.Uri.parse('memfs:/DownloadInstaller'));
+	// Create subdirectories under My Scripts
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Modules'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Functions'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Software'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Task'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Inventory'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Preflight'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Integration'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Deployment'));
 
-	// Create subcategories for Deployment
-	memFs.createDirectory(vscode.Uri.parse('memfs:/FilterScriptDeploymentTarget'));
-	memFs.createDirectory(vscode.Uri.parse('memfs:/MetascriptDeploymentTarget'));
+	// Create subdirectories under Global Scripts
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Modules'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Functions'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Software'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Task'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Inventory'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Preflight'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Integration'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Deployment'));
+
+	// Create Software subcategories
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Software/Detection'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Software/Download'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Software/Dynamic Version'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Software/Action (Install|Uninstall|Upgrade)'));
+	
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Software/Detection'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Software/Download'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Software/Dynamic Version'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Software/Action (Install|Uninstall|Upgrade)'));
+
+	// Create Deployment subcategories
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Deployment/Filter'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Deployment/Metascript'));
+	
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Deployment/Filter'));
+	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Deployment/Metascript'));
 
 	vscode.window.showInformationMessage('Fetching scripts');
 	if (response && Array.isArray(response)) {
 		response.forEach((script: any) => {
 			if (script && typeof script.scriptCategory !== 'undefined' && script.name && script.action) {
-				const extension = script.scriptCategory === 11 ? '.psm1' : '.ps1';
+				const extension = script.scriptLanguage === 2 ? (script.scriptCategory === 11 ? '.psm1' : '.ps1') : '.cmd';
 				let fileName = '';
+				let folderPath = '';
+				
+				// Determine the root folder based on script type
+				const rootFolder = script.scriptType === 1 ? 'My Scripts' : 'Global Scripts';
 				
 				// Map script category to the appropriate folder structure
 				switch (script.scriptCategory) {
-					case ScriptCategory.SoftwareDetection:
-						fileName = `memfs:/SoftwareDetection/${script.name}${extension}`;
+					case 0: // SoftwareDetection
+						folderPath = `${rootFolder}/Software/Detection`;
 						break;
-					case ScriptCategory.SoftwareAutoUpdate:
-						fileName = `memfs:/SoftwareAutoUpdate/${script.name}${extension}`;
+					case 1: // SoftwareAutoUpdate (deprecated)
+						folderPath = `${rootFolder}/Software/Action (Install|Uninstall|Upgrade)`;
 						break;
-					case ScriptCategory.SoftwareVersionAction:
-						fileName = `memfs:/SoftwareVersionAction/${script.name}${extension}`;
+					case 2: // SoftwareVersionAction
+						folderPath = `${rootFolder}/Software/Action (Install|Uninstall|Upgrade)`;
 						break;
-					case ScriptCategory.DynamicVersions:
-						fileName = `memfs:/DynamicVersions/${script.name}${extension}`;
+					case 3: // MaintenanceTaskSetter
+						folderPath = `${rootFolder}/Task`;
 						break;
-					case ScriptCategory.DownloadInstaller:
-						fileName = `memfs:/DownloadInstaller/${script.name}${extension}`;
+					case 4: // MetascriptDeploymentTarget
+						folderPath = `${rootFolder}/Deployment/Metascript`;
 						break;
-					case ScriptCategory.FilterScriptDeploymentTarget:
-						fileName = `memfs:/FilterScriptDeploymentTarget/${script.name}${extension}`;
+					case 5: // FilterScriptDeploymentTarget
+						folderPath = `${rootFolder}/Deployment/Filter`;
 						break;
-					case ScriptCategory.MetascriptDeploymentTarget:
-						fileName = `memfs:/MetascriptDeploymentTarget/${script.name}${extension}`;
+					case 6: // DeviceInventory
+						folderPath = `${rootFolder}/Inventory`;
+						break;
+					case 7: // Function
+						folderPath = `${rootFolder}/Functions`;
+						break;
+					case 8: // ImmySystem
+						folderPath = `${rootFolder}/System`;
+						break;
+					case 9: // DynamicVersions
+						folderPath = `${rootFolder}/Software/Dynamic Version`;
+						break;
+					case 10: // DownloadInstaller
+						folderPath = `${rootFolder}/Software/Download`;
+						break;
+					case 11: // Module
+						folderPath = `${rootFolder}/Modules`;
+						break;
+					case 12: // Preflight
+						folderPath = `${rootFolder}/Preflight`;
+						break;
+					case 13: // Integration
+						folderPath = `${rootFolder}/Integration`;
 						break;
 					default:
-						fileName = `memfs:/${ScriptCategory[script.scriptCategory]}/${script.name}${extension}`;
+						folderPath = `${rootFolder}/Unknown`;
+				}
+				
+				fileName = `memfs:/${folderPath}/${script.name}${extension}`;
+				
+				// Add metadata to the script content
+				let scriptContent = script.action;
+				
+				// Only add metadata if it doesn't already exist and it's a PowerShell script
+				if (script.scriptLanguage === 2 && !scriptContent.includes('<#\nMETADATA')) {
+					// Map execution context to friendly name
+					let executionContextName = 'Unknown';
+					switch (script.scriptExecutionContext) {
+						case 0: executionContextName = 'System'; break;
+						case 1: executionContextName = 'User'; break;
+						case 2: executionContextName = 'Metascript'; break;
+						case 4: executionContextName = 'CloudScript'; break;
+					}
+					
+					// Map script type to friendly name
+					let scriptTypeName = script.scriptType === 1 ? 'Local Script' : 'Global Script';
+					
+					// Map script category to friendly name
+					let scriptCategoryName = ScriptCategory[script.scriptCategory] || 'Unknown';
+					
+					// Map language to friendly name
+					let languageName = script.scriptLanguage === 2 ? 'PowerShell' : 'Command Line';
+					
+					// Create metadata block
+					const metadata = `<#\nMETADATA
+ScriptType: ${script.scriptType} (${scriptTypeName})
+ScriptCategory: ${script.scriptCategory} (${scriptCategoryName})
+ExecutionContext: ${script.scriptExecutionContext} (${executionContextName})
+Language: ${script.scriptLanguage} (${languageName})
+CreatedBy: ${script.updatedBy || 'Unknown'}
+CreatedDate: ${script.createdDateUTC || new Date().toISOString()}
+LastUpdated: ${script.updatedDateUTC || new Date().toISOString()}
+#>\n\n`;
+					
+					scriptContent = metadata + scriptContent;
 				}
 				
 				try {
-					memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(script.action), { create: true, overwrite: true });
+					memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(scriptContent), { create: true, overwrite: true });
 				} catch (e) {
 					console.error(e);
 				}

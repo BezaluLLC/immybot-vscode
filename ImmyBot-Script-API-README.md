@@ -4,136 +4,105 @@
 
 ### Scripts
 
-POST `/api/v1/scripts/debug/cancel/{cancellationId}`
 
+POST 
+`/api/v1/scripts/debug/cancel/{cancellationId}`
 
 POST
 `/api/v1/scripts/language-service/start`
 
-
 GET
 `/api/v1/scripts/language-service/{terminalId}/language`
-
 
 POST
 `/api/v1/scripts/run`
 
-
 GET
 `/api/v1/scripts/dx`
-
 
 GET
 `/api/v1/scripts/global/names`
 
-
 GET
 `/api/v1/scripts/local/names`
-
 
 GET
 `/api/v1/scripts/search`
 
-
 GET
 `/api/v1/scripts/local`
 
-
 POST
 `/api/v1/scripts/local`
-
 
 GET
 `/api/v1/scripts/global`
 
-
 POST
 `/api/v1/scripts/global`
 
-
 GET
 `/api/v1/scripts/local/{scriptId}`
-
 
 POST
 `/api/v1/scripts/local/{scriptId}`
 
-
 DELETE
 `/api/v1/scripts/local/{scriptId}`
-
 
 GET
 `/api/v1/scripts/global/{scriptId}`
 
-
 POST
 `/api/v1/scripts/global/{scriptId}`
 
-
 DELETE
 `/api/v1/scripts/global/{scriptId}`
-
 
 POST
 `/api/v1/scripts/syntax-check`
 
-
 GET
 `/api/v1/scripts/references/count`
-
 
 GET
 `/api/v1/scripts/global/{scriptId}/references`
 
-
 GET
 `/api/v1/scripts/local/{scriptId}/references`
-
 
 POST
 `/api/v1/scripts/duplicate`
 
-
 GET
 `/api/v1/scripts/local/{scriptId}/migrate-local-to-global-what-if`
-
 
 POST
 `/api/v1/scripts/local/{scriptId}/migrate-local-to-global`
 
-
 POST
 `/api/v1/scripts/default-variables`
-
 
 GET
 `/api/v1/scripts/functions`
 
-
 POST
 `/api/v1/scripts/functions/syntax`
-
 
 POST
 `/api/v1/scripts/validate-param-block-parameters`
 
-
 POST
 `/api/v1/scripts/does-script-have-param-block`
-
 
 GET
 `/api/v1/scripts/disabled-preflight-scripts`
 
-
 POST
 `/api/v1/scripts/set-preflight-script-enablement`
 
-
 GET
 `/api/v1/scripts/local/{scriptId}/audit`
-
 
 GET
 `/api/v1/scripts/global/{scriptId}/audit`
