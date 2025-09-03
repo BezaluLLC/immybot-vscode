@@ -20,6 +20,23 @@
 	],
 	"browser": "./dist/web/extension.js",
 	"contributes": {
+		"configuration": {
+			"title": "ImmyBot",
+			"properties": {
+				"immybot.azureClientId": {
+					"type": "string",
+					"default": "",
+					"description": "Azure AD Application Client ID for authentication. If not provided, uses the default client ID which may require additional configuration.",
+					"markdownDescription": "Azure AD Application Client ID for authentication. If not provided, uses the default client ID which may require additional configuration.\n\n**Required Redirect URIs for your Azure AD app registration:**\n- `https://vscode.dev/redirect`\n- `vscode://vscode.github-authentication/did-authenticate`"
+				},
+				"immybot.azureTenant": {
+					"type": "string",
+					"default": "common",
+					"description": "Azure AD Tenant ID or domain. Use 'common' for multi-tenant applications.",
+					"markdownDescription": "Azure AD Tenant ID or domain. Use `common` for multi-tenant applications, or specify your specific tenant ID/domain for single-tenant applications."
+				}
+			}
+		},
 		"languages": [
 			{
 				"id": "metascript",

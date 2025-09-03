@@ -38,15 +38,36 @@ enum ScriptCategory {
 	Unknown
 }
 
-const CLIENT_ID = 'f72a44d4-d2d4-450e-a2db-76b307cd045f';
-const SCOPES = [
-	`VSCODE_CLIENT_ID:${CLIENT_ID}`,
-	`VSCODE_TENANT:common`,
-	'profile',
-	'openid',
-	'offline_access',
-	'Files.ReadWrite',
-];
+// Default client ID - users should configure their own for production use
+const DEFAULT_CLIENT_ID = 'f72a44d4-d2d4-450e-a2db-76b307cd045f';
+
+// Get client ID from configuration or use default
+function getClientId(): string {
+	const config = vscode.workspace.getConfiguration('immybot');
+	const configuredClientId = config.get<string>('azureClientId');
+	return configuredClientId && configuredClientId.trim() !== '' ? configuredClientId : DEFAULT_CLIENT_ID;
+}
+
+// Get tenant from configuration or use default
+function getTenant(): string {
+	const config = vscode.workspace.getConfiguration('immybot');
+	return config.get<string>('azureTenant') || 'common';
+}
+
+// Build scopes dynamically based on configuration
+function buildScopes(): string[] {
+	const clientId = getClientId();
+	const tenant = getTenant();
+	
+	return [
+		`VSCODE_CLIENT_ID:${clientId}`,
+		`VSCODE_TENANT:${tenant}`,
+		'profile',
+		'openid',
+		'offline_access',
+		'Files.ReadWrite',
+	];
+}
 let initialized = false;
 let session: vscode.AuthenticationSession;
 let authOutputChannel: vscode.OutputChannel;
@@ -766,8 +787,10 @@ export async function activate(context: vscode.ExtensionContext) {
 					// We can't use signOut directly since it's not available in the API
 					// Instead, try several approaches to ensure the session is truly cleared
 					try {
+						const scopes = buildScopes();
+						
 						// 1. Clear session preference
-						await vscode.authentication.getSession('microsoft', SCOPES, { 
+						await vscode.authentication.getSession('microsoft', scopes, { 
 							clearSessionPreference: true 
 						});
 						
@@ -775,7 +798,7 @@ export async function activate(context: vscode.ExtensionContext) {
 						// This may not work in all VS Code versions, so we catch any errors
 						try {
 							// @ts-ignore - getSessions might exist in newer VS Code versions
-							const allSessions = await vscode.authentication.getSessions?.('microsoft', SCOPES);
+							const allSessions = await vscode.authentication.getSessions?.('microsoft', scopes);
 							if (allSessions && allSessions.length > 0) {
 								// Log how many sessions we're clearing
 								authOutputChannel.appendLine(`Found ${allSessions.length} active Microsoft sessions to clear`);
@@ -885,6 +908,17 @@ export async function activate(context: vscode.ExtensionContext) {
 // Helper function to handle sign-in attempts
 async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 	try {
+		const scopes = buildScopes();
+		const clientId = getClientId();
+		const tenant = getTenant();
+		
+		// Log authentication attempt details
+		authOutputChannel.appendLine(`Authentication attempt:`);
+		authOutputChannel.appendLine(`  Client ID: ${clientId}`);
+		authOutputChannel.appendLine(`  Tenant: ${tenant}`);
+		authOutputChannel.appendLine(`  Scopes: ${scopes.join(', ')}`);
+		authOutputChannel.appendLine(`  Prompt for auth: ${promptForAuth}`);
+		
 		// Check if we need to force a new session (set during sign-out)
 		// Use globalState instead of workspaceState for better persistence
 		const forceNewSession = extensionContext.globalState.get('immybot.forceNewSession', false);
@@ -895,7 +929,7 @@ async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 			await extensionContext.globalState.update('immybot.forceNewSession', false);
 			
 			// Force a completely new authentication
-			session = await vscode.authentication.getSession('microsoft', SCOPES, { 
+			session = await vscode.authentication.getSession('microsoft', scopes, { 
 				forceNewSession: true
 			});
 			
@@ -912,11 +946,73 @@ async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 		try {
 			// Try to get an existing session without creating a new one
 			// Use createIfNone=false to ensure we don't auto-create a session
-			existingSession = await vscode.authentication.getSession('microsoft', SCOPES, { 
+			existingSession = await vscode.authentication.getSession('microsoft', scopes, { 
 				createIfNone: false,
 				silent: !promptForAuth // Only show UI if explicitly requested
 			});
 		} catch (e) {
+			// Log authentication errors with more detail
+			const errorMessage = e instanceof Error ? e.message : String(e);
+			authOutputChannel.appendLine(`Error checking for existing session: ${errorMessage}`);
+			
+			// Check for specific Azure AD errors
+			if (errorMessage.includes('AADSTS900971')) {
+				const azureErrorMsg = `Azure AD Error AADSTS900971: No reply address provided.
+
+This error indicates that your Azure AD app registration is missing required redirect URIs for VS Code authentication.
+
+To fix this issue:
+1. Go to your Azure AD app registration (Client ID: ${clientId})
+2. Navigate to "Authentication" section
+3. Add these redirect URIs:
+   - https://vscode.dev/redirect
+   - vscode://vscode.github-authentication/did-authenticate
+4. Save the configuration
+
+Alternatively, you can:
+- Configure a custom Client ID in VS Code settings (immybot.azureClientId)
+- Create a new Azure AD app registration with the proper redirect URIs configured`;
+
+				vscode.window.showErrorMessage('Azure AD Authentication Configuration Error', 'Show Details', 'Open Settings').then(async (choice) => {
+					if (choice === 'Show Details') {
+						authOutputChannel.appendLine(`\n${azureErrorMsg}`);
+						authOutputChannel.show();
+					} else if (choice === 'Open Settings') {
+						vscode.commands.executeCommand('workbench.action.openSettings', 'immybot.azureClientId');
+					}
+				});
+				
+				authOutputChannel.appendLine(azureErrorMsg);
+				return false;
+			} else if (errorMessage.includes('AADSTS')) {
+				// Handle other Azure AD errors
+				const azureErrorMsg = `Azure AD Authentication Error: ${errorMessage}
+
+This may be due to:
+- App registration configuration issues
+- Tenant access restrictions  
+- Invalid client ID or scopes
+
+Current configuration:
+- Client ID: ${clientId}
+- Tenant: ${tenant}
+- Scopes: ${scopes.join(', ')}
+
+You can configure custom authentication settings in VS Code settings (immybot.azureClientId, immybot.azureTenant).`;
+
+				vscode.window.showErrorMessage('Azure AD Authentication Error', 'Show Details', 'Open Settings').then(async (choice) => {
+					if (choice === 'Show Details') {
+						authOutputChannel.appendLine(`\n${azureErrorMsg}`);
+						authOutputChannel.show();
+					} else if (choice === 'Open Settings') {
+						vscode.commands.executeCommand('workbench.action.openSettings', 'immybot');
+					}
+				});
+				
+				authOutputChannel.appendLine(azureErrorMsg);
+				return false;
+			}
+			
 			// Ignore errors when silently checking for a session
 			if (promptForAuth) {
 				throw e; // Re-throw if we were explicitly trying to authenticate
@@ -930,7 +1026,7 @@ async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 			return true;
 		} else if (promptForAuth) {
 			// No existing session but user clicked sign-in button, so prompt for auth
-			session = await vscode.authentication.getSession('microsoft', SCOPES, { 
+			session = await vscode.authentication.getSession('microsoft', scopes, { 
 				createIfNone: true
 			});
 			
@@ -945,7 +1041,38 @@ async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 		
 		return false;
 	} catch (error) {
-		vscode.window.showErrorMessage(`Authentication error: ${error instanceof Error ? error.message : String(error)}`);
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		
+		// Enhanced error logging and user guidance
+		authOutputChannel.appendLine(`Authentication failed: ${errorMessage}`);
+		
+		// Check for specific error patterns and provide targeted guidance
+		if (errorMessage.includes('AADSTS900971')) {
+			const clientId = getClientId();
+			const guidance = `Azure AD Error AADSTS900971: No reply address provided.
+
+Your Azure AD app registration (${clientId}) needs to be configured with these redirect URIs:
+- https://vscode.dev/redirect
+- vscode://vscode.github-authentication/did-authenticate
+
+Please update your Azure AD app registration or configure a different Client ID in settings.`;
+			
+			vscode.window.showErrorMessage('Authentication Configuration Error', 'Show Solution', 'Open Settings').then(async (choice) => {
+				if (choice === 'Show Solution') {
+					authOutputChannel.appendLine(`\n${guidance}`);
+					authOutputChannel.show();
+				} else if (choice === 'Open Settings') {
+					vscode.commands.executeCommand('workbench.action.openSettings', 'immybot.azureClientId');
+				}
+			});
+		} else {
+			vscode.window.showErrorMessage(`Authentication error: ${errorMessage}`, 'Show Details').then((choice) => {
+				if (choice === 'Show Details') {
+					authOutputChannel.show();
+				}
+			});
+		}
+		
 		console.error("Authentication error:", error);
 		return false;
 	}
