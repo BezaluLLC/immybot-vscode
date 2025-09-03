@@ -1,12 +1,12 @@
 {
 	"name": "immybot",
 	"displayName": "immybot",
-	"description": "HelloWorld example for VS Code in the browser",
+	"description": "Edit ImmyBot scripts from VS Code",
 	"version": "0.0.1",
 	"publisher": "ImmyBot",
 	"private": true,
 	"license": "MIT",
-	"repository": "https://github.com/microsoft/vscode-extension-samples/immybot",
+	"repository": "https://github.com/immense/immybot-vscode",
 	"engines": {
 		"vscode": "^1.74.0",
 		"node": ">=20.0.0"
