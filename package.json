@@ -9,7 +9,7 @@
 	"repository": "https://github.com/microsoft/vscode-extension-samples/immybot",
 	"engines": {
 		"vscode": "^1.74.0",
-		"node": ">=16.0.0"
+		"node": ">=20.0.0"
 	},
 	"categories": [
 		"Other"
