@@ -9,9 +9,9 @@ export function run(): Promise<void> {
 			reporter: undefined
 		});
 
-		// bundles all files in the current directory matching `*.test`
-		const importAll = (r: __WebpackModuleApi.RequireContext) => r.keys().forEach(r);
-		importAll(require.context('.', true, /\.test$/));
+		// // bundles all files in the current directory matching `*.test`
+		// const importAll = (r: __WebpackModuleApi.RequireContext) => r.keys().forEach(r);
+		// importAll(require.context('.', true, /\.test$/));
 
 		try {
 			// Run the mocha test

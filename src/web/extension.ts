@@ -38,14 +38,14 @@ enum ScriptCategory {
 	Unknown
 }
 
-const CLIENT_ID = 'f72a44d4-d2d4-450e-a2db-76b307cd045f';
+// Fixed multi-tenant app registration for ImmyBot VS Code Extension
+// This eliminates the need for customers to create their own app registration
+const IMMYBOT_CLIENT_ID = '1c8f6b7f-8397-48f4-9880-75460ab61bab';
 const SCOPES = [
-	`VSCODE_CLIENT_ID:${CLIENT_ID}`,
+	`VSCODE_CLIENT_ID:${IMMYBOT_CLIENT_ID}`,
 	`VSCODE_TENANT:common`,
-	'profile',
-	'openid',
-	'offline_access',
-	'Files.ReadWrite',
+	"offline_access", // Required for the refresh token.
+	"https://graph.microsoft.com/User.Read",
 ];
 let initialized = false;
 let session: vscode.AuthenticationSession;
@@ -53,6 +53,7 @@ let authOutputChannel: vscode.OutputChannel;
 
 // Declare context at the module level
 let extensionContext: vscode.ExtensionContext;
+
 
 // Class for TreeView items
 class ImmyBotTreeItem extends vscode.TreeItem {
@@ -65,12 +66,12 @@ class ImmyBotTreeItem extends vscode.TreeItem {
 	) {
 		// Use the original label without decoration
 		super(labelText, collapsibleState);
-		
+
 		// Set description if provided
 		if (description) {
 			this.description = description;
 		}
-		
+
 		// Set icon path if provided
 		if (iconName) {
 			this.iconPath = new vscode.ThemeIcon(iconName);
@@ -142,9 +143,9 @@ class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 					new ImmyBotTreeItem('Filter', vscode.TreeItemCollapsibleState.Collapsed),
 					new ImmyBotTreeItem('Metascript', vscode.TreeItemCollapsibleState.Collapsed)
 				]);
-			} else if (element.label === 'Detection' || 
-				element.label === 'Download' || 
-				element.label === 'Dynamic Version' || 
+			} else if (element.label === 'Detection' ||
+				element.label === 'Download' ||
+				element.label === 'Dynamic Version' ||
 				element.label === 'Action (Install|Uninstall|Upgrade)' ||
 				element.label === 'Filter' ||
 				element.label === 'Metascript' ||
@@ -161,11 +162,11 @@ class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 					const rootFolder = this.repoType === 'local' ? 'My Scripts' : 'Global Scripts';
 					let parentFolder = '';
 					let dirPath = '';
-					
+
 					// Find the parent of this node to determine the full path
-					if (element.label === 'Detection' || 
-						element.label === 'Download' || 
-						element.label === 'Dynamic Version' || 
+					if (element.label === 'Detection' ||
+						element.label === 'Download' ||
+						element.label === 'Dynamic Version' ||
 						element.label === 'Action (Install|Uninstall|Upgrade)') {
 						parentFolder = 'Software';
 					} else if (element.label === 'Filter' || element.label === 'Metascript') {
@@ -174,18 +175,18 @@ class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 						// Top-level folders
 						parentFolder = '';
 					}
-					
+
 					// Construct the directory path
 					if (parentFolder) {
 						dirPath = `memfs:/${rootFolder}/${parentFolder}/${element.label}`;
 					} else {
 						dirPath = `memfs:/${rootFolder}/${element.label}`;
 					}
-					
+
 					const dirUri = vscode.Uri.parse(dirPath);
 					const dirEntries = memFs.readDirectory(dirUri);
 					const fileItems: ImmyBotTreeItem[] = [];
-					
+
 					for (const [name, type] of dirEntries) {
 						if (type === vscode.FileType.File) {
 							const fileUri = vscode.Uri.parse(`${dirPath}/${name}`);
@@ -199,12 +200,12 @@ class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 							fileItems.push(fileItem);
 						}
 					}
-					
+
 					// Sort files alphabetically
 					fileItems.sort((a, b) => {
 						return a.label!.toString().localeCompare(b.label!.toString());
 					});
-					
+
 					return Promise.resolve(fileItems);
 				} catch (e) {
 					console.error('Error listing files:', e);
@@ -260,7 +261,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "immybot" is now active in the web extension host!');
-	
+
 	// Create the output channel during activation
 	authOutputChannel = vscode.window.createOutputChannel("Microsoft Authentication");
 	context.subscriptions.push(authOutputChannel);
@@ -268,17 +269,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Set up tree view providers for repositories
 	localRepoProvider = new ImmyBotRepoProvider('local');
 	globalRepoProvider = new ImmyBotRepoProvider('global');
-	
+
 	localRepoView = vscode.window.createTreeView('immybot-localrepo', {
 		treeDataProvider: localRepoProvider,
 		showCollapseAll: true
 	});
-	
+
 	globalRepoView = vscode.window.createTreeView('immybot-globalrepo', {
 		treeDataProvider: globalRepoProvider,
 		showCollapseAll: true
 	});
-	
+
 	context.subscriptions.push(localRepoView);
 	context.subscriptions.push(globalRepoView);
 
@@ -289,7 +290,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			globalRepoProvider.refresh();
 		})
 	);
-	
+
+
 	// Register toolbar commands
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.save', async () => {
@@ -300,7 +302,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
-	
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.discard', () => {
 			const editor = vscode.window.activeTextEditor;
@@ -310,13 +312,13 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
-	
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.refresh', async () => {
 			vscode.window.showInformationMessage('Refreshing scripts...');
 			authOutputChannel.appendLine('Refreshing scripts from ImmyBot server');
 			console.log('Refreshing scripts from ImmyBot server');
-			
+
 			try {
 				await fetchScripts();
 				vscode.window.showInformationMessage('Scripts refreshed successfully');
@@ -330,7 +332,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
-	
+
 	// Create file command
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.createFile', async () => {
@@ -338,36 +340,36 @@ export async function activate(context: vscode.ExtensionContext) {
 				vscode.window.showErrorMessage('Please sign in first.');
 				return;
 			}
-			
+
 			try {
 				// First, choose Script Type: Local or Global
 				const scriptTypeOptions = [
 					{ label: 'Local Script', description: 'Tenant-specific script', value: 1 },
 					{ label: 'Global Script', description: 'Shared across tenants', value: 2 }
 				];
-				
+
 				const selectedScriptType = await vscode.window.showQuickPick(scriptTypeOptions, {
 					placeHolder: 'Select Script Type'
 				});
-				
+
 				if (!selectedScriptType) {
 					return; // User cancelled
 				}
-				
+
 				// Next, choose Script Language
 				const scriptLanguageOptions = [
 					{ label: 'Command Line', description: 'Command Line script', value: 1 },
 					{ label: 'PowerShell', description: 'PowerShell script', value: 2 }
 				];
-				
+
 				const selectedLanguage = await vscode.window.showQuickPick(scriptLanguageOptions, {
 					placeHolder: 'Select Script Language'
 				});
-				
+
 				if (!selectedLanguage) {
 					return; // User cancelled
 				}
-				
+
 				// Then, choose Execution Context
 				const executionContextOptions = [
 					{ label: 'System', description: 'System execution context', value: 0 },
@@ -375,15 +377,15 @@ export async function activate(context: vscode.ExtensionContext) {
 					{ label: 'Metascript', description: 'Metascript execution context', value: 2 },
 					{ label: 'CloudScript', description: 'CloudScript execution context', value: 4 }
 				];
-				
+
 				const selectedExecutionContext = await vscode.window.showQuickPick(executionContextOptions, {
 					placeHolder: 'Select Execution Context'
 				});
-				
+
 				if (!selectedExecutionContext) {
 					return; // User cancelled
 				}
-				
+
 				// Top-level categories first
 				const scriptCategoryOptions = [
 					{ label: 'Modules', description: 'PowerShell module scripts', value: 11, dataType: 'Module' },
@@ -395,18 +397,18 @@ export async function activate(context: vscode.ExtensionContext) {
 					{ label: 'Integration', description: 'Integration scripts', value: 13, dataType: 'Integration' },
 					{ label: 'Deployment', description: 'Deployment-related scripts', value: -2, dataType: 'Deployment' }
 				];
-					
+
 				const selectedMainCategory = await vscode.window.showQuickPick(scriptCategoryOptions, {
 					placeHolder: 'Select a main category'
 				});
-				
+
 				if (!selectedMainCategory) {
 					return; // User cancelled
 				}
-				
+
 				// Handle subcategories for Software and Deployment
 				let selectedSubCategory = selectedMainCategory;
-				
+
 				if (selectedMainCategory.value === -1) { // Software
 					const softwareSubCategories = [
 						{ label: 'Detection', description: 'Software detection scripts', value: 0, dataType: 'SoftwareDetection' },
@@ -414,60 +416,60 @@ export async function activate(context: vscode.ExtensionContext) {
 						{ label: 'Dynamic Version', description: 'Dynamic version scripts', value: 9, dataType: 'DynamicVersions' },
 						{ label: 'Action (Install|Uninstall|Upgrade)', description: 'Software action scripts', value: 2, dataType: 'SoftwareVersionAction' }
 					];
-					
+
 					const selectedSoftwareSubCategory = await vscode.window.showQuickPick(softwareSubCategories, {
 						placeHolder: 'Select a software subcategory'
 					});
-					
+
 					if (!selectedSoftwareSubCategory) {
 						return; // User cancelled
 					}
-					
+
 					selectedSubCategory = selectedSoftwareSubCategory;
 				} else if (selectedMainCategory.value === -2) { // Deployment
 					const deploymentSubCategories = [
 						{ label: 'Filter', description: 'Deployment filter scripts', value: 5, dataType: 'FilterScriptDeploymentTarget' },
 						{ label: 'Metascript', description: 'Deployment metascript', value: 4, dataType: 'MetascriptDeploymentTarget' }
 					];
-					
+
 					const selectedDeploymentSubCategory = await vscode.window.showQuickPick(deploymentSubCategories, {
 						placeHolder: 'Select a deployment subcategory'
 					});
-					
+
 					if (!selectedDeploymentSubCategory) {
 						return; // User cancelled
 					}
-					
+
 					selectedSubCategory = selectedDeploymentSubCategory;
 				}
-				
+
 				// Get the file name from user
 				const fileName = await vscode.window.showInputBox({
 					prompt: `Enter file name for ${selectedSubCategory.label} (without extension)`,
 					placeHolder: 'MyNewScript'
 				});
-				
+
 				if (!fileName) {
 					return; // User cancelled
 				}
-				
+
 				// Determine extension based on language (PowerShell .ps1 or .psm1 for modules, .cmd for command line)
 				const isModule = selectedSubCategory.value === 11; // Module category
 				let extension = '';
-				
+
 				if (selectedLanguage.value === 2) { // PowerShell
 					extension = isModule ? '.psm1' : '.ps1';
 				} else {
 					extension = '.cmd';
 				}
-				
+
 				// Create the new file
 				let fileUri;
 				const rootFolder = selectedScriptType.value === 1 ? 'My Scripts' : 'Global Scripts';
-				
+
 				// Create the full folder path based on the category
 				let folderPath = '';
-				
+
 				if (selectedMainCategory.value === -1) { // Software
 					switch (selectedSubCategory.value) {
 						case 0: // Detection
@@ -521,18 +523,18 @@ export async function activate(context: vscode.ExtensionContext) {
 							folderPath = `${rootFolder}/${selectedSubCategory.dataType}`;
 					}
 				}
-				
+
 				fileUri = vscode.Uri.parse(`memfs:/${folderPath}/${fileName}${extension}`);
-				
+
 				// Get user email if available or username from session
 				const userEmail = session?.account?.label || 'Unknown User';
-				
+
 				// Current date in UTC format
 				const currentDate = new Date().toISOString();
-				
+
 				// Default content based on category with metadata
 				let defaultContent = '';
-				
+
 				// Add metadata header
 				defaultContent += `<#\n`;
 				defaultContent += `METADATA\n`;
@@ -543,7 +545,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				defaultContent += `CreatedBy: ${userEmail}\n`;
 				defaultContent += `CreatedDate: ${currentDate}\n`;
 				defaultContent += `#>\n\n`;
-				
+
 				// Add script content based on category
 				if (isModule) {
 					defaultContent += `# ${fileName} Module\n\nfunction Get-${fileName}Info {\n    [CmdletBinding()]\n    param()\n    \n    Write-Output "Hello from ${fileName} module"\n}\n\nExport-ModuleMember -Function Get-${fileName}Info`;
@@ -572,16 +574,16 @@ export async function activate(context: vscode.ExtensionContext) {
 				} else {
 					defaultContent += `# ${fileName} Script\n\n[CmdletBinding()]\nparam()\n\nWrite-Output "Hello from ${fileName} script"`;
 				}
-				
+
 				// Write the file
 				memFs.writeFile(fileUri, Buffer.from(defaultContent), { create: true, overwrite: false });
-				
+
 				// Open the file
 				const document = await vscode.workspace.openTextDocument(fileUri);
 				await vscode.window.showTextDocument(document);
-				
+
 				vscode.window.showInformationMessage(`Created new file: ${fileName}${extension}`);
-				
+
 				// Refresh the views
 				localRepoProvider.refresh();
 				globalRepoProvider.refresh();
@@ -592,7 +594,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
-	
+
 	// Delete file command
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.deleteFile', async () => {
@@ -600,7 +602,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				vscode.window.showErrorMessage('Please sign in first.');
 				return;
 			}
-			
+
 			try {
 				// Build a list of directories to scan with the new structure
 				const rootFolders = ['My Scripts', 'Global Scripts'];
@@ -616,21 +618,21 @@ export async function activate(context: vscode.ExtensionContext) {
 					'System',
 					'Unknown'
 				];
-				
+
 				const softwareSubFolders = [
 					'Detection',
 					'Download',
 					'Dynamic Version',
 					'Action (Install|Uninstall|Upgrade)'
 				];
-				
+
 				const deploymentSubFolders = [
 					'Filter',
 					'Metascript'
 				];
-				
+
 				const files: { label: string; uri: vscode.Uri }[] = [];
-				
+
 				// Scan all directories in the new structure
 				for (const rootFolder of rootFolders) {
 					for (const subFolder of subFolders) {
@@ -640,7 +642,7 @@ export async function activate(context: vscode.ExtensionContext) {
 								try {
 									const dirUri = vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}/${softwareSubFolder}`);
 									const dirEntries = memFs.readDirectory(dirUri);
-									
+
 									for (const [name, type] of dirEntries) {
 										if (type === vscode.FileType.File) {
 											files.push({
@@ -658,7 +660,7 @@ export async function activate(context: vscode.ExtensionContext) {
 								try {
 									const dirUri = vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}/${deploymentSubFolder}`);
 									const dirEntries = memFs.readDirectory(dirUri);
-									
+
 									for (const [name, type] of dirEntries) {
 										if (type === vscode.FileType.File) {
 											files.push({
@@ -676,7 +678,7 @@ export async function activate(context: vscode.ExtensionContext) {
 							try {
 								const dirUri = vscode.Uri.parse(`memfs:/${rootFolder}/${subFolder}`);
 								const dirEntries = memFs.readDirectory(dirUri);
-								
+
 								for (const [name, type] of dirEntries) {
 									if (type === vscode.FileType.File) {
 										files.push({
@@ -691,37 +693,37 @@ export async function activate(context: vscode.ExtensionContext) {
 						}
 					}
 				}
-				
+
 				if (files.length === 0) {
 					vscode.window.showInformationMessage('No files found to delete.');
 					return;
 				}
-				
+
 				// Show quick pick with all files
 				const selectedFile = await vscode.window.showQuickPick(files, {
 					placeHolder: 'Select a file to delete'
 				});
-				
+
 				if (!selectedFile) {
 					return; // User cancelled
 				}
-				
+
 				// Confirm deletion
 				const confirmation = await vscode.window.showWarningMessage(
 					`Are you sure you want to delete ${selectedFile.label}?`,
 					{ modal: true },
 					'Delete'
 				);
-				
+
 				if (confirmation !== 'Delete') {
 					return; // User cancelled
 				}
-				
+
 				// Delete the file
 				memFs.delete(selectedFile.uri);
-				
+
 				vscode.window.showInformationMessage(`Deleted file: ${selectedFile.label}`);
-				
+
 				// Refresh the views
 				localRepoProvider.refresh();
 				globalRepoProvider.refresh();
@@ -732,7 +734,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
-	
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.signOut', async () => {
 			// Remove the session - need to revoke it properly
@@ -740,14 +742,14 @@ export async function activate(context: vscode.ExtensionContext) {
 				try {
 					// Log the session we're revoking
 					authOutputChannel.appendLine(`Signing out user: ${session.account.label}`);
-					
+
 					// Store the session id before we clear it
 					const sessionId = session.id;
 					const accountId = session.account.id;
-					
+
 					// Clear our session variable first to prevent race conditions
 					session = undefined as any;
-					
+
 					// Clear the in-memory filesystem
 					for (const [name] of memFs.readDirectory(vscode.Uri.parse('memfs:/'))) {
 						try {
@@ -756,30 +758,30 @@ export async function activate(context: vscode.ExtensionContext) {
 							console.error(`Error cleaning up directory ${name}:`, e);
 						}
 					}
-					
+
 					// Reset initialization flag
 					initialized = false;
-					
+
 					// Reset the authentication context to show the sign-in view
 					await vscode.commands.executeCommand('setContext', 'immybot:authenticated', false);
-					
+
 					// We can't use signOut directly since it's not available in the API
 					// Instead, try several approaches to ensure the session is truly cleared
 					try {
 						// 1. Clear session preference
-						await vscode.authentication.getSession('microsoft', SCOPES, { 
-							clearSessionPreference: true 
+						await vscode.authentication.getSession('microsoft', session.scopes, {
+							createIfNone: true
 						});
-						
+
 						// 2. For VS Code versions that support it, try to get all sessions and remove them
 						// This may not work in all VS Code versions, so we catch any errors
 						try {
 							// @ts-ignore - getSessions might exist in newer VS Code versions
-							const allSessions = await vscode.authentication.getSessions?.('microsoft', SCOPES);
+							const allSessions = await vscode.authentication.getSessions?.('microsoft', session.scopes);
 							if (allSessions && allSessions.length > 0) {
 								// Log how many sessions we're clearing
 								authOutputChannel.appendLine(`Found ${allSessions.length} active Microsoft sessions to clear`);
-								
+
 								// Try to iterate through and remove all sessions
 								for (const sess of allSessions) {
 									try {
@@ -804,11 +806,11 @@ export async function activate(context: vscode.ExtensionContext) {
 						// Ignore errors when clearing session preference
 						console.log('Error clearing sessions:', error);
 					}
-					
+
 					// 3. Set a flag to force new session on next sign-in
 					// Use globalState instead of workspaceState for better persistence
 					await extensionContext.globalState.update('immybot.forceNewSession', true);
-					
+
 					// Log the successful sign-out
 					vscode.window.showInformationMessage('Signed out successfully');
 					authOutputChannel.appendLine('User signed out successfully');
@@ -825,7 +827,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
-	
+
 	// Register the sign-in command - this is what gets called when the user clicks "Sign In"
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.signIn', async () => {
@@ -833,14 +835,14 @@ export async function activate(context: vscode.ExtensionContext) {
 			await attemptSignIn(true);
 		})
 	);
-	
+
 	// Track when editors are opened to enable/disable buttons
 	context.subscriptions.push(
 		vscode.window.onDidChangeActiveTextEditor(() => {
 			updateEditorContext();
 		})
 	);
-	
+
 	// Listen for document opens to start the language server when needed
 	context.subscriptions.push(
 		vscode.workspace.onDidOpenTextDocument(async (document) => {
@@ -851,10 +853,16 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
-	
-	// Register file system provider
-	registerFileSystemProvider(context);
-	
+
+	// Register file system provider immediately during activation
+	context.subscriptions.push(vscode.workspace.registerFileSystemProvider('memfs', memFs, { isCaseSensitive: true }));
+
+	// Set up authentication callback for memfs
+	memFs.setAuthenticationCallback(() => initialized);
+
+	// Register memfs commands
+	registerMemfsCommands(context);
+
 	// Set initial editor context
 	updateEditorContext();
 
@@ -863,7 +871,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		try {
 			// First check if we have the force new session flag set (from a previous sign-out)
 			const forceNewSession = extensionContext.globalState.get('immybot.forceNewSession', false);
-			
+
 			if (forceNewSession) {
 				// If the flag is set, we should stay signed out until the user explicitly signs in
 				authOutputChannel.appendLine('Previous sign-out detected, remaining signed out');
@@ -888,31 +896,31 @@ async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 		// Check if we need to force a new session (set during sign-out)
 		// Use globalState instead of workspaceState for better persistence
 		const forceNewSession = extensionContext.globalState.get('immybot.forceNewSession', false);
-		
+
 		// If we're explicitly signing in and a new session is forced, use forceNewSession
 		if (promptForAuth && forceNewSession) {
 			// Clear the flag so we don't force new sessions forever
 			await extensionContext.globalState.update('immybot.forceNewSession', false);
-			
+
 			// Force a completely new authentication
-			session = await vscode.authentication.getSession('microsoft', SCOPES, { 
+			session = await vscode.authentication.getSession('microsoft', SCOPES, {
 				forceNewSession: true
 			});
-			
+
 			if (session) {
 				await processSuccessfulSignIn();
 				return true;
 			}
 			return false;
 		}
-		
+
 		// Check for existing session first
 		let existingSession: vscode.AuthenticationSession | undefined;
-		
+
 		try {
 			// Try to get an existing session without creating a new one
 			// Use createIfNone=false to ensure we don't auto-create a session
-			existingSession = await vscode.authentication.getSession('microsoft', SCOPES, { 
+			existingSession = await vscode.authentication.getSession('microsoft', SCOPES, {
 				createIfNone: false,
 				silent: !promptForAuth // Only show UI if explicitly requested
 			});
@@ -922,7 +930,7 @@ async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 				throw e; // Re-throw if we were explicitly trying to authenticate
 			}
 		}
-		
+
 		if (existingSession) {
 			// We have an existing valid session
 			session = existingSession;
@@ -930,10 +938,10 @@ async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 			return true;
 		} else if (promptForAuth) {
 			// No existing session but user clicked sign-in button, so prompt for auth
-			session = await vscode.authentication.getSession('microsoft', SCOPES, { 
+			session = await vscode.authentication.getSession('microsoft', SCOPES, {
 				createIfNone: true
 			});
-			
+
 			if (session) {
 				await processSuccessfulSignIn();
 				return true;
@@ -942,7 +950,7 @@ async function attemptSignIn(promptForAuth: boolean): Promise<boolean> {
 			// No session and not prompting for auth - just show the sign-in view
 			await vscode.commands.executeCommand('setContext', 'immybot:authenticated', false);
 		}
-		
+
 		return false;
 	} catch (error) {
 		vscode.window.showErrorMessage(`Authentication error: ${error instanceof Error ? error.message : String(error)}`);
@@ -956,68 +964,64 @@ async function processSuccessfulSignIn() {
 	if (!session || !session.accessToken) {
 		return false;
 	}
-	
+
 	vscode.window.showInformationMessage('Signed in as ' + session.account.label);
-	
+
 	// Use the output channel created during activation
 	authOutputChannel.appendLine(`Successfully signed in to Microsoft Authentication`);
 	authOutputChannel.appendLine(`Account ID: ${session.account.id}`);
 	authOutputChannel.appendLine(`Account Label: ${session.account.label}`);
 	authOutputChannel.appendLine(`Session ID: ${session.id}`);
 	authOutputChannel.appendLine(`Session Scopes: ${session.scopes.join(', ')}`);
-	
+
 	// Parse and log id token if available
 	if ('idToken' in session) {
 		const idToken = (session as any).idToken;
 		if (idToken) {
 			const tokenData = parseJwt(idToken);
 			authOutputChannel.appendLine(`\nID Token Contents:`);
-			
+
 			// Log useful claims
 			const claimsToDisplay = [
-				'name', 'preferred_username', 'email', 'oid', 'tid', 
+				'name', 'preferred_username', 'email', 'oid', 'tid',
 				'given_name', 'family_name', 'upn', 'unique_name', 'sub'
 			];
-			
+
 			for (const claim of claimsToDisplay) {
 				if (claim in tokenData) {
 					authOutputChannel.appendLine(`  - ${claim}: ${tokenData[claim]}`);
 				}
 			}
-			
+
 			// Get first name from name claim
 			if (tokenData.name) {
 				firstName = tokenData.name.split(' ')[0]; // Get first part of the name
-				
+
 				// Refresh tree views to show the signed-in user
 				localRepoProvider.refresh();
 				globalRepoProvider.refresh();
 			}
 		}
 	}
-	
+
 	authOutputChannel.show();
-	
+
 	// Set context to update sidebar visibility
 	await vscode.commands.executeCommand('setContext', 'immybot:authenticated', true);
-	
+
 	// Update editor context
 	updateEditorContext();
-	
+
 	// If not initialized, load scripts
 	if (!initialized) {
 		await fetchScripts();
 		initialized = true;
 	}
-	
+
 	return true;
 }
 
-function registerFileSystemProvider(context: vscode.ExtensionContext) {
-	if (initialized) {
-		return;
-	}
-	context.subscriptions.push(vscode.workspace.registerFileSystemProvider('memfs', memFs, { isCaseSensitive: true }));
+function registerMemfsCommands(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(vscode.commands.registerCommand('memfs.reset', async (_) => {
 		await attemptSignIn(true);
@@ -1072,7 +1076,7 @@ async function startLanguageServerAndClient(context: vscode.ExtensionContext) {
 			return;
 		}
 		console.log("Language server started!");
-		
+
 		// Create a disposable for the websocket that we can add to context.subscriptions
 		const disposable = new vscode.Disposable(() => {
 			// This will be called when the extension is deactivated
@@ -1080,12 +1084,12 @@ async function startLanguageServerAndClient(context: vscode.ExtensionContext) {
 				ws.close();
 			}
 		});
-		
+
 		const ws = new WebSocket(`ws://localhost:5000/api/v1/scripts/language-service/${terminalId}/language`);
-		
+
 		// Add the websocket disposable to the context
 		context.subscriptions.push(disposable);
-		
+
 		ws.onopen = async () => {
 			vscode.window.showInformationMessage("Language client websocket opened");
 			try {
@@ -1112,11 +1116,11 @@ async function startLanguageServerAndClient(context: vscode.ExtensionContext) {
 				console.error("Error in websocket onopen handler:", error);
 			}
 		};
-		
+
 		ws.onerror = (error) => {
 			console.error("WebSocket error:", error);
 		};
-		
+
 		ws.onclose = (event) => {
 			console.log("WebSocket closed:", event.code, event.reason);
 		};
@@ -1130,7 +1134,7 @@ function createLanguageClient(transports: MessageTransports): MonacoLanguageClie
 		name: "ImmyBot Language Client",
 		clientOptions: {
 			// use a language id as a document selector
-			documentSelector: 				[	{ scheme: 'memfs', language: 'metascript' }]
+			documentSelector: [{ scheme: 'memfs', language: 'metascript' }]
 			,
 			initializationOptions: {
 				enableProfileLoading: false,
@@ -1163,7 +1167,7 @@ function parseJwt(token: string) {
 		// Base64 decoding
 		const base64Url = token.split('.')[1];
 		const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-		const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+		const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
 			return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
 		}).join(''));
 
@@ -1180,6 +1184,10 @@ async function fetchScripts() {
 	// Create top-level directories for Local and Global scripts
 	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts'));
 	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts'));
+
+	// Create .vscode directory and mcp.json to prevent VS Code errors
+	memFs.createDirectory(vscode.Uri.parse('memfs:/.vscode'));
+	memFs.writeFile(vscode.Uri.parse('memfs:/.vscode/mcp.json'), Buffer.from('{}'), { create: true, overwrite: true });
 
 	// Create subdirectories under My Scripts
 	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Modules'));
@@ -1206,7 +1214,7 @@ async function fetchScripts() {
 	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Software/Download'));
 	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Software/Dynamic Version'));
 	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Software/Action (Install|Uninstall|Upgrade)'));
-	
+
 	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Software/Detection'));
 	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Software/Download'));
 	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Software/Dynamic Version'));
@@ -1215,7 +1223,7 @@ async function fetchScripts() {
 	// Create Deployment subcategories
 	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Deployment/Filter'));
 	memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts/Deployment/Metascript'));
-	
+
 	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Deployment/Filter'));
 	memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts/Deployment/Metascript'));
 
@@ -1226,10 +1234,10 @@ async function fetchScripts() {
 				const extension = script.scriptLanguage === 2 ? (script.scriptCategory === 11 ? '.psm1' : '.ps1') : '.cmd';
 				let fileName = '';
 				let folderPath = '';
-				
+
 				// Determine the root folder based on script type
 				const rootFolder = script.scriptType === 1 ? 'My Scripts' : 'Global Scripts';
-				
+
 				// Map script category to the appropriate folder structure
 				switch (script.scriptCategory) {
 					case 0: // SoftwareDetection
@@ -1277,12 +1285,12 @@ async function fetchScripts() {
 					default:
 						folderPath = `${rootFolder}/Unknown`;
 				}
-				
+
 				fileName = `memfs:/${folderPath}/${script.name}${extension}`;
-				
+
 				// Add metadata to the script content
 				let scriptContent = script.action;
-				
+
 				// Only add metadata if it doesn't already exist and it's a PowerShell script
 				if (script.scriptLanguage === 2 && !scriptContent.includes('<#\nMETADATA')) {
 					// Map execution context to friendly name
@@ -1293,16 +1301,16 @@ async function fetchScripts() {
 						case 2: executionContextName = 'Metascript'; break;
 						case 4: executionContextName = 'CloudScript'; break;
 					}
-					
+
 					// Map script type to friendly name
 					let scriptTypeName = script.scriptType === 1 ? 'Local Script' : 'Global Script';
-					
+
 					// Map script category to friendly name
 					let scriptCategoryName = ScriptCategory[script.scriptCategory] || 'Unknown';
-					
+
 					// Map language to friendly name
 					let languageName = script.scriptLanguage === 2 ? 'PowerShell' : 'Command Line';
-					
+
 					// Create metadata block
 					const metadata = `<#\nMETADATA
 ScriptType: ${script.scriptType} (${scriptTypeName})
@@ -1313,10 +1321,10 @@ CreatedBy: ${script.updatedBy || 'Unknown'}
 CreatedDate: ${script.createdDateUTC || new Date().toISOString()}
 LastUpdated: ${script.updatedDateUTC || new Date().toISOString()}
 #>\n\n`;
-					
+
 					scriptContent = metadata + scriptContent;
 				}
-				
+
 				try {
 					memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(scriptContent), { create: true, overwrite: true });
 				} catch (e) {

@@ -52,7 +52,7 @@
 		"viewsWelcome": [
 			{
 				"view": "immybot-signin",
-				"contents": "Sign in to ImmyBot\n[Sign In](command:immybot.signIn)\n\nNeed to set the Client ID first?\n[Set Client ID](command:immybot.setClientId)"
+				"contents": "Sign in to ImmyBot\n[Sign In](command:immybot.signIn)"
 			}
 		],
 		"menus": {
@@ -115,10 +115,6 @@
 				{
 					"command": "memfs.addFile",
 					"when": "workbenchState == workspace"
-				},
-				{
-					"command": "immybot.setClientId",
-					"when": "workbenchState == workspace"
 				}
 			]
 		},
@@ -160,10 +156,6 @@
 				"command": "immybot.deleteFile",
 				"title": "Delete File",
 				"icon": "$(trash)"
-			},
-			{
-				"command": "immybot.setClientId",
-				"title": "ImmyBot: Set Client ID"
 			},
 			{
 				"command": "memfs.reset",
@@ -217,7 +209,6 @@
 		"pretest": "npm run compile-web",
 		"vscode:prepublish": "npm run package-web",
 		"compile-web": "vite build",
-		"watch-web": "vite build --watch",
 		"package-web": "vite build --mode production",
 		"lint": "eslint src --ext ts"
 	},

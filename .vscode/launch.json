@@ -6,7 +6,7 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Run Web Extension in VS Code",
+			"name": "Debug ImmyBot Extension in VS Code",
 			"type": "extensionHost",
 			"debugWebWorkerHost": true,
 			"request": "launch",
@@ -18,11 +18,15 @@
 			"outFiles": [
 				"${workspaceFolder}/dist/web/**/*.js"
 			],
-			"preLaunchTask": "watch-web2",
-			"showAsyncStacks": true
+			"showAsyncStacks": true,
+			"sourceMaps": true,
+			"resolveSourceMapLocations": [
+				"${workspaceFolder}/**",
+				"!**/node_modules/**"
+			]
 		},
 		{
-			"name": "Run Web Extension in Browser",
+			"name": "Run ImmyBot Extension in Browser",
 			"type": "extensionHost",
 			"debugWebWorkerHost": true,
 			"request": "launch",
@@ -64,7 +68,6 @@
 			"outFiles": [
 				"${workspaceFolder}/dist/web/**/*.js"
 			],
-			"preLaunchTask": "npm: watch-web"
 		}
 	]
 }

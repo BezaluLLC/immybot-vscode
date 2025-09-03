@@ -17,26 +17,7 @@
 			"type": "npm",
 			"script": "debug",
 			"group": "build",
-			"dependsOn": [
-				"watch-web"
-			],
-			"isBackground": true,
-			
-			
-		},
-		{
-			"label": "watch-web2",
-			"type": "npm",
-			"script": "watch-web",
-			"isBackground": true,
-			"runOptions": {
-				"instanceLimit": 1,
-				"reevaluateOnRerun": true
-			},
-			"problemMatcher": [
-				"$ts-webpack-watch",
-				"$tslint-webpack-watch"
-			],
+			"isBackground": false,
 		}
 	]
 }

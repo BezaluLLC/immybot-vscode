@@ -51,14 +51,32 @@ export type Entry = File | Directory;
 export class MemFS implements vscode.FileSystemProvider {
 
 	root = new Directory('');
+	private isAuthenticatedCallback: () => boolean = () => false;
+
+	setAuthenticationCallback(callback: () => boolean): void {
+		this.isAuthenticatedCallback = callback;
+	}
+
+	private checkAuthentication(uri: vscode.Uri): void {
+		// Allow access to .vscode directory and its contents to prevent VS Code errors
+		if (uri.path.startsWith('/.vscode/')) {
+			return;
+		}
+		
+		if (!this.isAuthenticatedCallback()) {
+			throw vscode.FileSystemError.FileNotFound(uri);
+		}
+	}
 
 	// --- manage file metadata
 
 	stat(uri: vscode.Uri): vscode.FileStat {
+		this.checkAuthentication(uri);
 		return this._lookup(uri, false);
 	}
 
 	readDirectory(uri: vscode.Uri): [string, vscode.FileType][] {
+		this.checkAuthentication(uri);
 		const entry = this._lookupAsDirectory(uri, false);
 		const result: [string, vscode.FileType][] = [];
 		for (const [name, child] of entry.entries) {
@@ -70,6 +88,7 @@ export class MemFS implements vscode.FileSystemProvider {
 	// --- manage file contents
 
 	readFile(uri: vscode.Uri): Uint8Array {
+		this.checkAuthentication(uri);
 		const data = this._lookupAsFile(uri, false).data;
 		if (data) {
 			return data;
