@@ -66,11 +66,14 @@ export function registerCommands(
 		vscode.commands.registerCommand('immybot.refresh', async () => {
 			vscode.window.showInformationMessage('Refreshing scripts...');
 			state.authOutputChannel?.appendLine('Refreshing scripts from ImmyBot server');
-			console.log('Refreshing scripts from ImmyBot server');
-
 			try {
 				// Get the current scriptManager instance
 				const currentScriptManager = getScriptManager();
+				
+				// Ensure the script manager has the current access token
+				if (state.immyBotAccessToken) {
+					currentScriptManager.setAccessToken(state.immyBotAccessToken);
+				}
 				
 				await currentScriptManager.fetchScripts();
 				vscode.window.showInformationMessage('Scripts refreshed successfully');
@@ -102,7 +105,6 @@ export function registerCommands(
 	// Sign in command
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.signIn', async () => {
-			console.log('Sign In command triggered');
 			vscode.window.showInformationMessage('Sign In command triggered - starting authentication...');
 			
 			try {
@@ -138,15 +140,22 @@ export function registerCommands(
 				// Update state with instanceUrl
 				updateState({ instanceUrl });
 				
+				// Log the instance URL for debugging
+				state.authOutputChannel?.appendLine(`Sign In: Instance URL set to: ${instanceUrl}`);
+				
 				// Only proceed with authentication when explicitly requested by user
 				const result = await attemptSignIn(true, state, updateState, async () => {
 					// Get the current scriptManager instance and fetch scripts
 					const currentScriptManager = getScriptManager();
+					// Update the script manager with the new access token
+					if (state.immyBotAccessToken) {
+						currentScriptManager.setAccessToken(state.immyBotAccessToken);
+					}
+					state.authOutputChannel?.appendLine('Sign In: About to fetch scripts...');
 					await currentScriptManager.fetchScripts();
+					state.authOutputChannel?.appendLine('Sign In: Scripts fetched successfully');
 				});
-				console.log('Sign In result:', result);
-			} catch (error) {
-				console.error('Sign In error:', error);
+				} catch (error) {
 				vscode.window.showErrorMessage(`Sign In failed: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		})
@@ -273,8 +282,7 @@ async function handleCreateFile(
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		vscode.window.showErrorMessage(`Failed to create file: ${errorMessage}`);
-		console.error('Error creating file:', error);
-	}
+		}
 }
 
 async function handleCategorySelection(
@@ -584,8 +592,7 @@ async function handleDeleteFile(
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		vscode.window.showErrorMessage(`Failed to delete file: ${errorMessage}`);
-		console.error('Error deleting file:', error);
-	}
+		}
 }
 
 function registerMemfsCommands(context: vscode.ExtensionContext, state: ExtensionState, immyFs: ImmyBotFileSystemProvider) {

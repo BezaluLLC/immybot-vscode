@@ -15,7 +15,6 @@ export async function startLanguageServerAndClient(context: vscode.ExtensionCont
 		// Document selector definition retained internally in createLanguageClient
 		// Options to control the language client
 		// Client options object not currently used directly; configuration passed later in createLanguageClient
-		console.log("Starting language server");
 		const terminalId = '00000000-0000-0000-0000-000000000000';
 		const startResponse = await fetch(`http://localhost:5000/api/v1/scripts/language-service/start`, {
 			body: JSON.stringify({
@@ -28,11 +27,8 @@ export async function startLanguageServerAndClient(context: vscode.ExtensionCont
 			}
 		});
 		if (!startResponse.ok) {
-			console.error("Failed to start language server:", startResponse.status, await startResponse.text());
-			return;
+		    return;
 		}
-		console.log("Language server started!");
-
 		// Create a disposable for the websocket that we can add to context.subscriptions
 		const disposable = new vscode.Disposable(() => {
 			// This will be called when the extension is deactivated
@@ -66,23 +62,18 @@ export async function startLanguageServerAndClient(context: vscode.ExtensionCont
 				}
 				catch (error) {
 					vscode.window.showInformationMessage("Language client failed to start");
-					console.error(error);
-				}
+					}
 			} catch (error) {
-				console.error("Error in websocket onopen handler:", error);
-			}
+				}
 		};
 
 		ws.onerror = (error) => {
-			console.error("WebSocket error:", error);
-		};
+			};
 
 		ws.onclose = (event) => {
-			console.log("WebSocket closed:", event.code, event.reason);
-		};
+			};
 	} catch (error) {
-		console.error("Error in startLanguageServerAndClient:", error);
-	}
+		}
 }
 
 function createLanguageClient(transports: MessageTransports): MonacoLanguageClient {

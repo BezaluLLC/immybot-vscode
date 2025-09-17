@@ -214,6 +214,11 @@
 					"description": "The URL of your ImmyBot instance (e.g., https://your-tenant.immy.bot)",
 					"pattern": "^https?://.*",
 					"patternErrorMessage": "Instance URL must be a valid HTTP or HTTPS URL"
+				},
+				"immybot.autoSignIn": {
+					"type": "boolean",
+					"default": false,
+					"description": "Automatically attempt sign-in when the extension starts (useful for testing)"
 				}
 			}
 		}
@@ -223,24 +228,18 @@
 		"debug": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=.",
 		"pretest": "npm run compile-web",
 		"vscode:prepublish": "npm run package-web",
-		"compile-web": "vite build",
+		"compile-web": "oxlint --deny-warnings -D no-console src && vite build",
 		"package-web": "vite build --mode production",
-		"lint:eslint": "eslint",
-		"lint:ox": "oxlint",
-		"lint": "npm run lint:ox && npm run lint:eslint",
-		"lint:fix": "npm run lint:ox && npm run lint:eslint -- --fix"
+		"lint": "oxlint --deny-warnings -D no-console src",
+		"lint:fix": "oxlint --fix src"
 	},
 	"devDependencies": {
-		"@eslint/js": "^9.35.0",
-		"@types/eslint__js": "^8.42.3",
 		"@types/mocha": "^9.0.0",
 		"@types/node": "^20.14.9",
 		"@types/vscode": "^1.73.0",
 		"@types/ws": "^8.5.10",
 		"@vscode/test-web": "^0.0.22",
 		"assert": "^2.0.0",
-		"eslint": "^9.35.0",
-		"eslint-plugin-oxlint": "^0.9.10",
 		"jiti": "^2.5.1",
 		"mocha": "^11.1.0",
 		"oxlint": "^0.9.8",

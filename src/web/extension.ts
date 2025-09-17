@@ -9,6 +9,7 @@ import { ImmyBotScriptTreeDataProvider } from './treeProvider';
 import { ScriptManager } from './scriptManager';
 import { registerCommands } from './commands';
 import { attemptSignIn } from './authentication';
+import { loadDevelopmentConfig, isDevelopmentMode, updateDevelopmentConfig } from './developmentConfig';
 
 const immyFs = new ImmyBotFileSystemProvider();
 
@@ -36,14 +37,25 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
-	console.log(`Congratulations, your extension "immybot" is now active in the ${context.extensionMode} extension host!`);
-
 	// Create the output channel during activation
 	extensionState.authOutputChannel = vscode.window.createOutputChannel("ImmyBot");
 	context.subscriptions.push(extensionState.authOutputChannel);
+	
+	// Log activation to output channel immediately
+	extensionState.authOutputChannel.appendLine('=== ImmyBot Extension Activated ===');
+	extensionState.authOutputChannel.appendLine(`Extension mode: ${context.extensionMode}`);
+	extensionState.authOutputChannel.appendLine(`Activation time: ${new Date().toISOString()}`);
 
-	// Initialize script manager with instanceUrl
-	const instanceUrl = await getInstanceUrl(context);
+	// Load development configuration if in development mode
+	let devConfig = {};
+	if (isDevelopmentMode()) {
+		devConfig = await loadDevelopmentConfig();
+		extensionState.authOutputChannel?.appendLine('Development mode detected');
+		extensionState.authOutputChannel?.appendLine(`Development config: ${JSON.stringify(devConfig, null, 2)}`);
+	}
+
+	// Initialize script manager with instanceUrl (prefer dev config, then settings)
+	const instanceUrl = (devConfig as any)['immybot.instanceUrl'] || await getInstanceUrl(context);
 	scriptManager = new ScriptManager(immyFs, instanceUrl);
 	updateState({ instanceUrl });
 
@@ -76,9 +88,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		localRepoProvider,
 		globalRepoProvider,
 		() => {
-			// Ensure scriptManager is updated with current instanceUrl
+			// Ensure scriptManager is updated with current instanceUrl and access token
 			if (extensionState.instanceUrl && (!scriptManager || (scriptManager as any).instanceUrl !== extensionState.instanceUrl)) {
-				scriptManager = new ScriptManager(immyFs, extensionState.instanceUrl);
+				scriptManager = new ScriptManager(immyFs, extensionState.instanceUrl, extensionState.immyBotAccessToken);
+			} else if (scriptManager && extensionState.immyBotAccessToken) {
+				// Update access token if scriptManager exists but token changed
+				scriptManager.setAccessToken(extensionState.immyBotAccessToken);
 			}
 			return scriptManager;
 		}
@@ -87,17 +102,69 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Register file system provider immediately during activation
 	context.subscriptions.push(vscode.workspace.registerFileSystemProvider('immyfs', immyFs, { isCaseSensitive: true }));
 
-	// Try to sign in silently on startup
-	await attemptSignIn(false, extensionState, updateState, async () => {
-		// Update scriptManager with current instanceUrl before fetching
-		const currentInstanceUrl = extensionState.instanceUrl || await getInstanceUrl(context);
-		scriptManager = new ScriptManager(immyFs, currentInstanceUrl);
-		updateState({ instanceUrl: currentInstanceUrl });
+	// Check if auto sign-in is enabled (prefer dev config, then settings)
+	const config = vscode.workspace.getConfiguration('immybot');
+	const autoSignIn = (devConfig as any)['immybot.autoSignIn'] ?? config.get<boolean>('autoSignIn', false);
+	const existingAccessToken = (devConfig as any)['immybot.accessToken'];
+	
+	extensionState.authOutputChannel?.appendLine('ImmyBot Extension: Starting authentication flow...');
+	extensionState.authOutputChannel?.appendLine(`Auto sign-in enabled: ${autoSignIn}`);
+	extensionState.authOutputChannel?.appendLine(`Instance URL: ${extensionState.instanceUrl}`);
+	extensionState.authOutputChannel?.appendLine(`Has existing access token: ${!!existingAccessToken}`);
+	
+	// If we have an existing access token in dev config, use it directly
+	if (isDevelopmentMode() && existingAccessToken && extensionState.instanceUrl) {
+		extensionState.authOutputChannel?.appendLine('Using existing access token from development config');
 		
-		await scriptManager.fetchScripts();
-		localRepoProvider.refresh();
-		globalRepoProvider.refresh();
-	});
+		updateState({
+			immyBotAccessToken: existingAccessToken,
+			initialized: true
+		});
+		
+		// Set context to update sidebar visibility
+		await vscode.commands.executeCommand('setContext', 'immybot:authenticated', true);
+		
+		// Fetch scripts with existing token
+		scriptManager = new ScriptManager(immyFs, extensionState.instanceUrl, existingAccessToken);
+		try {
+			await scriptManager.fetchScripts();
+			localRepoProvider.refresh();
+			globalRepoProvider.refresh();
+			extensionState.authOutputChannel?.appendLine('Successfully loaded scripts with existing token');
+		} catch (error) {
+			extensionState.authOutputChannel?.appendLine(`Failed to load scripts with existing token: ${error}`);
+		}
+	} else if (autoSignIn) {
+		// Auto sign-in for testing - force authentication
+		extensionState.authOutputChannel?.appendLine('Auto sign-in enabled - attempting authentication...');
+		
+		await attemptSignIn(true, extensionState, updateState, async () => {
+			// Update scriptManager with current instanceUrl and access token before fetching
+			const currentInstanceUrl = extensionState.instanceUrl || await getInstanceUrl(context);
+			scriptManager = new ScriptManager(immyFs, currentInstanceUrl, extensionState.immyBotAccessToken);
+			updateState({ instanceUrl: currentInstanceUrl });
+			
+			extensionState.authOutputChannel?.appendLine('Fetching scripts from ImmyBot API...');
+			await scriptManager.fetchScripts();
+			localRepoProvider.refresh();
+			globalRepoProvider.refresh();
+		});
+	} else {
+		// Try to sign in silently on startup
+		extensionState.authOutputChannel?.appendLine('Attempting silent sign-in...');
+		
+		await attemptSignIn(false, extensionState, updateState, async () => {
+			// Update scriptManager with current instanceUrl and access token before fetching
+			const currentInstanceUrl = extensionState.instanceUrl || await getInstanceUrl(context);
+			scriptManager = new ScriptManager(immyFs, currentInstanceUrl, extensionState.immyBotAccessToken);
+			updateState({ instanceUrl: currentInstanceUrl });
+			
+			extensionState.authOutputChannel?.appendLine('Fetching scripts from ImmyBot API...');
+			await scriptManager.fetchScripts();
+			localRepoProvider.refresh();
+			globalRepoProvider.refresh();
+		});
+	}
 }
 
 // Helper function to get or prompt for instanceUrl

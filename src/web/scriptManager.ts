@@ -7,10 +7,14 @@ import { ImmyBotClient } from './immyBotClient';
 import { ScriptCategory } from './types';
 
 export class ScriptManager {
-	constructor(private immyFs: ImmyBotFileSystemProvider, private instanceUrl?: string) {}
+	constructor(private immyFs: ImmyBotFileSystemProvider, private instanceUrl?: string, private accessToken?: string) {}
+
+	public setAccessToken(token: string) {
+		this.accessToken = token;
+	}
 
 	async fetchScripts() {
-		const client = new ImmyBotClient(this.instanceUrl);
+		const client = new ImmyBotClient(this.instanceUrl, this.accessToken);
 		const response = await client.fetchJson<any>('/api/v1/scripts');
 
 		// Create top-level directories for Local and Global scripts
@@ -35,8 +39,7 @@ export class ScriptManager {
 				}
 			});
 		} else {
-			console.error('Failed to fetch scripts or invalid response format', response);
-		}
+			}
 	}
 
 	private createScriptDirectories(rootFolder: string) {
@@ -82,8 +85,7 @@ export class ScriptManager {
 		try {
 			this.immyFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(scriptContent), { create: true, overwrite: true });
 		} catch (e) {
-			console.error(e);
-		}
+			}
 	}
 
 	private getCategoryFolderPath(scriptCategory: number, rootFolder: string): string {

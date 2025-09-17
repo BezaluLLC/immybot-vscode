@@ -26,17 +26,20 @@ This is a VSCode web extension that allows users to edit ImmyBot scripts directl
 ## Development Setup
 
 ### Prerequisites
+
 - Node.js >= 20.0.0
 - npm
 - VSCode
 - PowerShell
 
 ### Installation
+
 ```bash
 npm install
 ```
 
 ### Development Commands
+
 - **Build**: [`npm run compile-web`](package.json:226) - Compiles TypeScript to JavaScript
 - **Package**: [`npm run package-web`](package.json:227) - Production build
 - **Lint**: [`npm run lint`](package.json:230) - Runs oxlint + eslint
@@ -47,6 +50,7 @@ npm install
 **IMPORTANT**: Always use [`Test-ImmyBotExtension.ps1`](Test-ImmyBotExtension.ps1:1) to test code changes instead of manually running individual commands or attempting to gather logs yourself.
 
 ### Usage
+
 ```powershell
 # Test with default 15-second timeout
 ./Test-ImmyBotExtension.ps1
@@ -56,7 +60,9 @@ npm install
 ```
 
 ### Why Use This Script
+
 The script automatically:
+
 1. Builds the extension and exits on failure
 2. Creates an isolated VSCode environment with fresh logs
 3. Launches VSCode with the extension loaded
@@ -69,12 +75,14 @@ This provides a complete test cycle in one command with proper log analysis, eli
 ## API Integration
 
 The extension integrates with the ImmyBot REST API:
+
 - **Scripts**: [`/api/v1/scripts/local`](ImmyBot-Script-API-README.md:33), [`/api/v1/scripts/global`](ImmyBot-Script-API-README.md:39)
 - **Authentication**: Microsoft OAuth with JWT tokens
 - **Categories**: Software Detection (0), Software Version Action (2), Function (7), Module (11), Integration (13)
 - **Contexts**: Metascript (2), CloudScript (4), System (0), User (1)
 
 ## File Structure
+
 ```
 immybot-vscode/
 ├── src/web/                    # Extension source code

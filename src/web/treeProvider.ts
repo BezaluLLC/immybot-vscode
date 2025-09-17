@@ -103,7 +103,6 @@ export class ImmyBotScriptTreeDataProvider implements vscode.TreeDataProvider<Im
 
 					return Promise.resolve(fileItems);
 				} catch (e) {
-					console.error('Error listing files:', e);
 					return Promise.resolve([]);
 				}
 			}

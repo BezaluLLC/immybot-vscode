@@ -97,4 +97,5 @@ export interface ExtensionState {
 	extensionContext?: vscode.ExtensionContext;
 	firstName: string;
 	instanceUrl?: string;
+	immyBotAccessToken?: string;
 }
