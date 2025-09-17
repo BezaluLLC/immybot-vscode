@@ -7,10 +7,10 @@ import { ImmyBotClient } from './immyBotClient';
 import { ScriptCategory } from './types';
 
 export class ScriptManager {
-	constructor(private immyFs: ImmyBotFileSystemProvider) {}
+	constructor(private immyFs: ImmyBotFileSystemProvider, private instanceUrl?: string) {}
 
 	async fetchScripts() {
-		const client = new ImmyBotClient();
+		const client = new ImmyBotClient(this.instanceUrl);
 		const response = await client.fetchJson<any>('/api/v1/scripts');
 
 		// Create top-level directories for Local and Global scripts

@@ -204,7 +204,19 @@
 					}
 				]
 			}
-		]
+		],
+		"configuration": {
+			"title": "ImmyBot",
+			"properties": {
+				"immybot.instanceUrl": {
+					"type": "string",
+					"default": "",
+					"description": "The URL of your ImmyBot instance (e.g., https://your-tenant.immy.bot)",
+					"pattern": "^https?://.*",
+					"patternErrorMessage": "Instance URL must be a valid HTTP or HTTPS URL"
+				}
+			}
+		}
 	},
 	"scripts": {
 		"test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js",

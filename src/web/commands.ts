@@ -9,6 +9,21 @@ import { ScriptManager } from './scriptManager';
 import { attemptSignIn, updateEditorContext } from './authentication';
 import { startLanguageServerAndClient } from './languageServer';
 
+// Type definitions for script creation options
+interface ScriptOption {
+	label: string;
+	description: string;
+	value: number;
+	dataType?: string;
+}
+
+interface CategorySelectionResult {
+	selectedSubCategory?: ScriptOption;
+	fileName?: string;
+	fileUri?: vscode.Uri;
+	defaultContent?: string;
+}
+
 export function registerCommands(
 	context: vscode.ExtensionContext,
 	state: ExtensionState,
@@ -16,7 +31,7 @@ export function registerCommands(
 	immyFs: ImmyBotFileSystemProvider,
 	localRepoProvider: ImmyBotScriptTreeDataProvider,
 	globalRepoProvider: ImmyBotScriptTreeDataProvider,
-	scriptManager: ScriptManager
+	getScriptManager: () => ScriptManager
 ) {
 	// Register command to refresh views
 	context.subscriptions.push(
@@ -54,7 +69,10 @@ export function registerCommands(
 			console.log('Refreshing scripts from ImmyBot server');
 
 			try {
-				await scriptManager.fetchScripts();
+				// Get the current scriptManager instance
+				const currentScriptManager = getScriptManager();
+				
+				await currentScriptManager.fetchScripts();
 				vscode.window.showInformationMessage('Scripts refreshed successfully');
 				// Refresh the tree views
 				localRepoProvider.refresh();
@@ -84,10 +102,53 @@ export function registerCommands(
 	// Sign in command
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.signIn', async () => {
-			// Only proceed with authentication when explicitly requested by user
-			await attemptSignIn(true, state, updateState, async () => {
-				await scriptManager.fetchScripts();
-			});
+			console.log('Sign In command triggered');
+			vscode.window.showInformationMessage('Sign In command triggered - starting authentication...');
+			
+			try {
+				// Check for instanceUrl first
+				const config = vscode.workspace.getConfiguration('immybot');
+				let instanceUrl = config.get<string>('instanceUrl', '');
+				
+				if (!instanceUrl) {
+					// Prompt user for instanceUrl
+					instanceUrl = await vscode.window.showInputBox({
+						prompt: 'Enter your ImmyBot instance URL',
+						placeHolder: 'https://your-tenant.immy.bot',
+						validateInput: (value: string) => {
+							if (!value) {
+								return 'Instance URL is required';
+							}
+							if (!value.match(/^https?:\/\/.+/)) {
+								return 'Please enter a valid HTTP or HTTPS URL';
+							}
+							return null;
+						}
+					}) || '';
+					
+					if (!instanceUrl) {
+						vscode.window.showErrorMessage('Instance URL is required for sign in');
+						return;
+					}
+					
+					// Save to user settings
+					await config.update('instanceUrl', instanceUrl, vscode.ConfigurationTarget.Global);
+				}
+				
+				// Update state with instanceUrl
+				updateState({ instanceUrl });
+				
+				// Only proceed with authentication when explicitly requested by user
+				const result = await attemptSignIn(true, state, updateState, async () => {
+					// Get the current scriptManager instance and fetch scripts
+					const currentScriptManager = getScriptManager();
+					await currentScriptManager.fetchScripts();
+				});
+				console.log('Sign In result:', result);
+			} catch (error) {
+				console.error('Sign In error:', error);
+				vscode.window.showErrorMessage(`Sign In failed: ${error instanceof Error ? error.message : String(error)}`);
+			}
 		})
 	);
 
@@ -198,7 +259,7 @@ async function handleCreateFile(
 		}
 
 		// Write the file
-		immyFs.writeFile(fileUri, Buffer.from(defaultContent), { create: true, overwrite: false });
+		immyFs.writeFile(fileUri, Buffer.from(defaultContent || ''), { create: true, overwrite: false });
 
 		// Open the file
 		const document = await vscode.workspace.openTextDocument(fileUri);
@@ -217,11 +278,11 @@ async function handleCreateFile(
 }
 
 async function handleCategorySelection(
-	selectedScriptType: any,
-	selectedLanguage: any,
-	selectedExecutionContext: any,
+	selectedScriptType: ScriptOption,
+	selectedLanguage: ScriptOption,
+	selectedExecutionContext: ScriptOption,
 	state: ExtensionState
-) {
+): Promise<CategorySelectionResult> {
 	// Top-level categories first
 	const scriptCategoryOptions = [
 		{ label: 'Modules', description: 'PowerShell module scripts', value: 11, dataType: 'Module' },
@@ -304,14 +365,14 @@ async function handleCategorySelection(
 }
 
 function createFilePathAndContent(
-	selectedScriptType: any,
-	selectedLanguage: any,
-	selectedExecutionContext: any,
-	selectedMainCategory: any,
-	selectedSubCategory: any,
+	selectedScriptType: ScriptOption,
+	selectedLanguage: ScriptOption,
+	selectedExecutionContext: ScriptOption,
+	selectedMainCategory: ScriptOption,
+	selectedSubCategory: ScriptOption,
 	fileName: string,
 	state: ExtensionState
-) {
+): { fileUri: vscode.Uri; defaultContent: string } {
 	// Determine extension based on language
 	const isModule = selectedSubCategory.value === 11;
 	let extension = '';
@@ -369,10 +430,10 @@ function createFilePathAndContent(
 }
 
 function createDefaultContent(
-	selectedScriptType: any,
-	selectedLanguage: any,
-	selectedExecutionContext: any,
-	selectedSubCategory: any,
+	selectedScriptType: ScriptOption,
+	selectedLanguage: ScriptOption,
+	selectedExecutionContext: ScriptOption,
+	selectedSubCategory: ScriptOption,
 	fileName: string,
 	state: ExtensionState
 ): string {
@@ -528,21 +589,27 @@ async function handleDeleteFile(
 }
 
 function registerMemfsCommands(context: vscode.ExtensionContext, state: ExtensionState, immyFs: ImmyBotFileSystemProvider) {
-	context.subscriptions.push(vscode.commands.registerCommand('immyfs.reset', async (_) => {
-		await attemptSignIn(true, state, () => {}, async () => {});
+	context.subscriptions.push(vscode.commands.registerCommand('immyfs.reset', async () => {
+		// This command should not be used - it's a legacy command that doesn't properly update state
+		vscode.window.showWarningMessage('This command is deprecated. Please use the Sign In command instead.');
 	}));
 
-	context.subscriptions.push(vscode.commands.registerCommand('immyfs.addFile', _ => {
+	context.subscriptions.push(vscode.commands.registerCommand('immyfs.addFile', () => {
 		if (state.initialized) {
 			immyFs.writeFile(vscode.Uri.parse(`immyfs:/file.txt`), Buffer.from('foo'), { create: true, overwrite: true });
 		}
 	}));
 
-	context.subscriptions.push(vscode.commands.registerCommand('immyfs.deleteFile', _ => {
+	context.subscriptions.push(vscode.commands.registerCommand('immyfs.deleteFile', () => {
 		if (state.initialized) {
 			immyFs.delete(vscode.Uri.parse('immyfs:/file.txt'));
 		}
 	}));
 
+	// Don't add workspace folder here - it will be added after successful authentication
+}
+
+// Function to add the workspace folder after authentication
+export function addImmyBotWorkspaceFolder() {
 	vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('immyfs:/'), name: 'ImmyBot' });
 }

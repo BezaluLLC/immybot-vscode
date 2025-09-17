@@ -10,7 +10,7 @@ export class ResponseError extends Error {
 	}
 }
 export class ImmyBotClient {
-	constructor() { }
+	constructor(private instanceUrl: string = 'http://localhost:5000') { }
 
 
 	public async fetchJson<T>(route: string, params?: RequestInit): Promise<T | null> {
@@ -21,7 +21,7 @@ export class ImmyBotClient {
 		return await response.json();
 	}
 	private async fetch(route: string, params: RequestInit = {}) {
-		const routeToFetch = route.startsWith('https:') ? route : `http://localhost:5000` + route;
+		const routeToFetch = route.startsWith('https:') || route.startsWith('http:') ? route : this.instanceUrl + route;
 		try {
 			console.log("fetching", routeToFetch, params);
 			const response = await fetch(routeToFetch, params);

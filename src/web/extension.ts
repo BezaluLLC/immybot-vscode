@@ -42,8 +42,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	extensionState.authOutputChannel = vscode.window.createOutputChannel("ImmyBot");
 	context.subscriptions.push(extensionState.authOutputChannel);
 
-	// Initialize script manager
-	scriptManager = new ScriptManager(immyFs);
+	// Initialize script manager with instanceUrl
+	const instanceUrl = await getInstanceUrl(context);
+	scriptManager = new ScriptManager(immyFs, instanceUrl);
+	updateState({ instanceUrl });
 
 	// Set up authentication callback for file system
 	immyFs.setAuthenticationCallback(() => extensionState.initialized);
@@ -73,7 +75,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		immyFs,
 		localRepoProvider,
 		globalRepoProvider,
-		scriptManager
+		() => {
+			// Ensure scriptManager is updated with current instanceUrl
+			if (extensionState.instanceUrl && (!scriptManager || (scriptManager as any).instanceUrl !== extensionState.instanceUrl)) {
+				scriptManager = new ScriptManager(immyFs, extensionState.instanceUrl);
+			}
+			return scriptManager;
+		}
 	);
 
 	// Register file system provider immediately during activation
@@ -81,10 +89,45 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Try to sign in silently on startup
 	await attemptSignIn(false, extensionState, updateState, async () => {
+		// Update scriptManager with current instanceUrl before fetching
+		const currentInstanceUrl = extensionState.instanceUrl || await getInstanceUrl(context);
+		scriptManager = new ScriptManager(immyFs, currentInstanceUrl);
+		updateState({ instanceUrl: currentInstanceUrl });
+		
 		await scriptManager.fetchScripts();
 		localRepoProvider.refresh();
 		globalRepoProvider.refresh();
 	});
+}
+
+// Helper function to get or prompt for instanceUrl
+async function getInstanceUrl(context: vscode.ExtensionContext): Promise<string> {
+	const config = vscode.workspace.getConfiguration('immybot');
+	let instanceUrl = config.get<string>('instanceUrl', '');
+	
+	if (!instanceUrl) {
+		// Prompt user for instanceUrl
+		instanceUrl = await vscode.window.showInputBox({
+			prompt: 'Enter your ImmyBot instance URL',
+			placeHolder: 'https://your-tenant.immy.bot',
+			validateInput: (value: string) => {
+				if (!value) {
+					return 'Instance URL is required';
+				}
+				if (!value.match(/^https?:\/\/.+/)) {
+					return 'Please enter a valid HTTP or HTTPS URL';
+				}
+				return null;
+			}
+		}) || '';
+		
+		if (instanceUrl) {
+			// Save to user settings
+			await config.update('instanceUrl', instanceUrl, vscode.ConfigurationTarget.Global);
+		}
+	}
+	
+	return instanceUrl;
 }
 
 // This method is called when your extension is deactivated

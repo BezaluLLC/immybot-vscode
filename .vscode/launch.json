@@ -6,7 +6,38 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Debug ImmyBot Extension in VS Code",
+			"name": "Debug ImmyBot Extension in VS Code (Clean Workspace)",
+			"type": "extensionHost",
+			"debugWebWorkerHost": true,
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"--extensionDevelopmentKind=web",
+				"--disable-extensions",
+				"--folder-uri=${workspaceFolder}/.vscode/test-workspace",
+				"-n"
+			],
+			"outFiles": [
+				"${workspaceFolder}/dist/web/**/*.js"
+			],
+			"smartStep": true,
+			"skipFiles": [
+				"<node_internals>/**/*.js",
+				"**/node_modules/**"
+			],
+			"showAsyncStacks": true,
+			"sourceMaps": true,
+			"resolveSourceMapLocations": [
+				"${workspaceFolder}/**",
+				"!**/node_modules/**"
+			],
+			"preLaunchTask": "create-test-workspace",
+			"pauseForSourceMap": true,
+			"autoAttachChildProcesses": true,
+			"debugWebviews": true
+		},
+		{
+			"name": "Debug ImmyBot Extension in VS Code (Original)",
 			"type": "extensionHost",
 			"debugWebWorkerHost": true,
 			"request": "launch",

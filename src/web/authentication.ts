@@ -3,6 +3,7 @@
  */
 import * as vscode from 'vscode';
 import { SCOPES, ExtensionState } from './types';
+import { addImmyBotWorkspaceFolder } from './commands';
 
 // Add helper function to parse JWT
 export function parseJwt(token: string) {
@@ -22,11 +23,20 @@ export function parseJwt(token: string) {
 
 // Helper function to handle sign-in attempts
 export async function attemptSignIn(
-	promptForAuth: boolean, 
+	promptForAuth: boolean,
 	state: ExtensionState,
 	updateState: (updates: Partial<ExtensionState>) => void,
 	onSuccessfulSignIn: () => Promise<void>
 ): Promise<boolean> {
+	console.log('attemptSignIn called with promptForAuth:', promptForAuth);
+	
+	// Check if authentication API is available
+	if (!vscode.authentication) {
+		console.error('VSCode authentication API not available');
+		vscode.window.showErrorMessage('Authentication API not available in this context');
+		return false;
+	}
+	
 	try {
 		// Check for the force new session flag
 		const forceNewSession = state.extensionContext?.globalState.get('immybot.forceNewSession', false);
@@ -149,10 +159,13 @@ export async function processSuccessfulSignIn(
 	// Update editor context
 	updateEditorContext();
 
-	// If not initialized, load scripts
+	// If not initialized, load scripts and add workspace folder
 	if (!state.initialized) {
 		await onSuccessfulSignIn();
 		updateState({ initialized: true });
+		
+		// Add the workspace folder after successful authentication
+		addImmyBotWorkspaceFolder();
 	}
 
 	return true;

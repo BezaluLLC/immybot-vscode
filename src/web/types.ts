@@ -96,4 +96,5 @@ export interface ExtensionState {
 	authOutputChannel?: vscode.OutputChannel;
 	extensionContext?: vscode.ExtensionContext;
 	firstName: string;
+	instanceUrl?: string;
 }

@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
-import path from 'path';
 
 export default defineConfig({
   plugins: [
@@ -30,7 +29,7 @@ export default defineConfig({
         format: 'cjs',
       },
     },
-    sourcemap: 'hidden',
+    sourcemap: true,
   },
   resolve: {
     alias: {

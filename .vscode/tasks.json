@@ -18,6 +18,22 @@
 			"script": "debug",
 			"group": "build",
 			"isBackground": false,
+		},
+		{
+			"label": "create-test-workspace",
+			"type": "shell",
+			"command": "mkdir",
+			"args": ["-p", "${workspaceFolder}/.vscode/test-workspace"],
+			"group": "build",
+			"presentation": {
+				"echo": false,
+				"reveal": "never",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": false,
+				"clear": false
+			},
+			"dependsOn": "npm: compile-web",
 		}
 	]
 }
