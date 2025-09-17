@@ -18,12 +18,18 @@
 			"outFiles": [
 				"${workspaceFolder}/dist/web/**/*.js"
 			],
+			"smartStep": true,
+			"skipFiles": [
+				"<node_internals>/**/*.js",
+				"**/node_modules/**"
+			],
 			"showAsyncStacks": true,
 			"sourceMaps": true,
 			"resolveSourceMapLocations": [
 				"${workspaceFolder}/**",
 				"!**/node_modules/**"
-			]
+			],
+			"preLaunchTask": "npm: compile-web"
 		},
 		{
 			"name": "Run ImmyBot Extension in Browser",
