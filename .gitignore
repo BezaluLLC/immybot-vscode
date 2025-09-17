@@ -1,4 +1,11 @@
 dist
 node_modules
 .vscode-test-web/
+.vscode/test-workspace/
 *.vsix
+
+# Development configuration (contains sensitive tokens)
+.vscode/development.json
+.vscode/settings.user.json
+.gitignore
+.vscode/settings.workspace.json

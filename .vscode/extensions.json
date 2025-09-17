@@ -4,6 +4,7 @@
 	"recommendations": [
 		"dbaeumer.vscode-eslint",
 		"usernamehw.errorlens",
-		"ms-vscode.extension-test-runner"
+		"ms-vscode.extension-test-runner",
+		"oxc.oxc-vscode"
 	]
 }
