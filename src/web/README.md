@@ -25,13 +25,16 @@ This directory contains the refactored ImmyBot VS Code extension code, broken do
 ## Architecture
 
 ### State Management
+
 The extension uses a centralized state object (`ExtensionState`) that is managed through:
+
 - Global state variable `extensionState`
 - Update function `updateState()` for controlled mutations
 - State access through getter functions passed to components
 
 ### Component Relationships
-```
+
+```plain
 extension.ts (main orchestrator)
 ├── types.ts (shared definitions)
 ├── authentication.ts (auth flows)

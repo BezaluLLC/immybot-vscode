@@ -48,7 +48,7 @@ export class Directory implements vscode.FileStat {
 
 export type Entry = File | Directory;
 
-export class MemFS implements vscode.FileSystemProvider {
+export class ImmyBotFileSystemProvider implements vscode.FileSystemProvider {
 
 	root = new Directory('');
 	private isAuthenticatedCallback: () => boolean = () => false;

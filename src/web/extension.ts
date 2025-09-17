@@ -3,14 +3,14 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { MemFS } from './fileSystemProvider';
+import { ImmyBotFileSystemProvider } from './immyBotFileSystemProvider';
 import { ExtensionState } from './types';
-import { ImmyBotRepoProvider } from './treeProvider';
+import { ImmyBotScriptTreeDataProvider } from './treeProvider';
 import { ScriptManager } from './scriptManager';
 import { registerCommands } from './commands';
 import { attemptSignIn } from './authentication';
 
-const memFs = new MemFS();
+const immyFs = new ImmyBotFileSystemProvider();
 
 // Extension state management
 let extensionState: ExtensionState = {
@@ -22,8 +22,8 @@ function updateState(updates: Partial<ExtensionState>) {
 	extensionState = { ...extensionState, ...updates };
 }
 
-let localRepoProvider: ImmyBotRepoProvider;
-let globalRepoProvider: ImmyBotRepoProvider;
+let localRepoProvider: ImmyBotScriptTreeDataProvider;
+let globalRepoProvider: ImmyBotScriptTreeDataProvider;
 let localRepoView: vscode.TreeView<any>;
 let globalRepoView: vscode.TreeView<any>;
 let scriptManager: ScriptManager;
@@ -36,21 +36,21 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "immybot" is now active in the web extension host!');
+	console.log(`Congratulations, your extension "immybot" is now active in the ${context.extensionMode} extension host!`);
 
 	// Create the output channel during activation
-	extensionState.authOutputChannel = vscode.window.createOutputChannel("Microsoft Authentication");
+	extensionState.authOutputChannel = vscode.window.createOutputChannel("ImmyBot");
 	context.subscriptions.push(extensionState.authOutputChannel);
 
 	// Initialize script manager
-	scriptManager = new ScriptManager(memFs);
+	scriptManager = new ScriptManager(immyFs);
 
 	// Set up authentication callback for file system
-	memFs.setAuthenticationCallback(() => extensionState.initialized);
+	immyFs.setAuthenticationCallback(() => extensionState.initialized);
 
 	// Set up tree view providers for repositories
-	localRepoProvider = new ImmyBotRepoProvider('local', memFs, () => extensionState);
-	globalRepoProvider = new ImmyBotRepoProvider('global', memFs, () => extensionState);
+	localRepoProvider = new ImmyBotScriptTreeDataProvider('local', immyFs, () => extensionState);
+	globalRepoProvider = new ImmyBotScriptTreeDataProvider('global', immyFs, () => extensionState);
 
 	localRepoView = vscode.window.createTreeView('immybot-localrepo', {
 		treeDataProvider: localRepoProvider,
@@ -70,14 +70,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		context,
 		extensionState,
 		updateState,
-		memFs,
+		immyFs,
 		localRepoProvider,
 		globalRepoProvider,
 		scriptManager
 	);
 
 	// Register file system provider immediately during activation
-	context.subscriptions.push(vscode.workspace.registerFileSystemProvider('memfs', memFs, { isCaseSensitive: true }));
+	context.subscriptions.push(vscode.workspace.registerFileSystemProvider('immyfs', immyFs, { isCaseSensitive: true }));
 
 	// Try to sign in silently on startup
 	await attemptSignIn(false, extensionState, updateState, async () => {

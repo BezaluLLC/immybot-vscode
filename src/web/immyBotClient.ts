@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+// Removed unused vscode import flagged by oxlint
 
 export class ResponseError extends Error {
 	public static is(e: unknown, statusCode: number): e is ResponseError {

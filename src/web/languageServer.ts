@@ -6,28 +6,15 @@ import { WebSocketMessageReader, WebSocketMessageWriter, toSocket } from "vscode
 import {
 	CloseAction,
 	ErrorAction,
-	LanguageClientOptions,
 	MessageTransports,
 } from 'vscode-languageclient';
 import { MonacoLanguageClient } from "monaco-languageclient";
 
 export async function startLanguageServerAndClient(context: vscode.ExtensionContext) {
 	try {
-		const documentSelector = [{ scheme: 'memfs', language: 'powershell' }];
+		// Document selector definition retained internally in createLanguageClient
 		// Options to control the language client
-		const clientOptions: LanguageClientOptions = {
-			documentSelector,
-			synchronize: {},
-			initializationOptions: {
-				enableProfileLoading: false,
-				analyzeOpenDocumentsOnly: false,
-				scriptAnalysis: {
-					enable: true,
-				},
-			},
-			progressOnInitialization: true,
-			connectionOptions: {}
-		};
+		// Client options object not currently used directly; configuration passed later in createLanguageClient
 		console.log("Starting language server");
 		const terminalId = '00000000-0000-0000-0000-000000000000';
 		const startResponse = await fetch(`http://localhost:5000/api/v1/scripts/language-service/start`, {
@@ -70,7 +57,7 @@ export async function startLanguageServerAndClient(context: vscode.ExtensionCont
 					reader,
 					writer,
 				});
-				var startMessage = vscode.window.showInformationMessage("Starting language client");
+				vscode.window.showInformationMessage("Starting language client");
 
 				try {
 					await languageClient.start();
@@ -103,7 +90,7 @@ function createLanguageClient(transports: MessageTransports): MonacoLanguageClie
 		name: "ImmyBot Language Client",
 		clientOptions: {
 			// use a language id as a document selector
-			documentSelector: [{ scheme: 'memfs', language: 'metascript' }]
+			documentSelector: [{ scheme: 'immyfs', language: 'metascript' }]
 			,
 			initializationOptions: {
 				enableProfileLoading: false,

@@ -3,16 +3,16 @@
  */
 import * as vscode from 'vscode';
 import { ImmyBotTreeItem, ExtensionState } from './types';
-import { MemFS } from './fileSystemProvider';
+import { ImmyBotFileSystemProvider } from './immyBotFileSystemProvider';
 
 // TreeView provider for repositories
-export class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
+export class ImmyBotScriptTreeDataProvider implements vscode.TreeDataProvider<ImmyBotTreeItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<ImmyBotTreeItem | undefined | null | void> = new vscode.EventEmitter<ImmyBotTreeItem | undefined | null | void>();
 	readonly onDidChangeTreeData: vscode.Event<ImmyBotTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
 	constructor(
 		private repoType: 'local' | 'global',
-		private memFs: MemFS,
+		private immyFs: ImmyBotFileSystemProvider,
 		private getState: () => ExtensionState
 	) { }
 
@@ -65,17 +65,17 @@ export class ImmyBotRepoProvider implements vscode.TreeDataProvider<ImmyBotTreeI
 						element.label === 'Dynamic Version' ||
 						element.label === 'Action (Install|Uninstall|Upgrade)') {
 						parentFolder = 'Software';
-						dirPath = `memfs:/${rootFolder}/${parentFolder}/${element.label}`;
+						dirPath = `immyfs:/${rootFolder}/${parentFolder}/${element.label}`;
 					} else if (element.label === 'Filter' || element.label === 'Metascript') {
 						parentFolder = 'Deployment';
-						dirPath = `memfs:/${rootFolder}/${parentFolder}/${element.label}`;
+						dirPath = `immyfs:/${rootFolder}/${parentFolder}/${element.label}`;
 					} else {
 						// Top-level category
-						dirPath = `memfs:/${rootFolder}/${element.label}`;
+						dirPath = `immyfs:/${rootFolder}/${element.label}`;
 					}
 
 					const uri = vscode.Uri.parse(dirPath);
-					const files = this.memFs.readDirectory(uri);
+					const files = this.immyFs.readDirectory(uri);
 					const fileItems = [];
 
 					for (const [fileName, fileType] of files) {

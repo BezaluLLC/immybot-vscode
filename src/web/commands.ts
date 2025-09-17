@@ -3,8 +3,8 @@
  */
 import * as vscode from 'vscode';
 import { ExtensionState } from './types';
-import { MemFS } from './fileSystemProvider';
-import { ImmyBotRepoProvider } from './treeProvider';
+import { ImmyBotFileSystemProvider } from './immyBotFileSystemProvider';
+import { ImmyBotScriptTreeDataProvider } from './treeProvider';
 import { ScriptManager } from './scriptManager';
 import { attemptSignIn, updateEditorContext } from './authentication';
 import { startLanguageServerAndClient } from './languageServer';
@@ -13,9 +13,9 @@ export function registerCommands(
 	context: vscode.ExtensionContext,
 	state: ExtensionState,
 	updateState: (updates: Partial<ExtensionState>) => void,
-	memFs: MemFS,
-	localRepoProvider: ImmyBotRepoProvider,
-	globalRepoProvider: ImmyBotRepoProvider,
+	immyFs: ImmyBotFileSystemProvider,
+	localRepoProvider: ImmyBotScriptTreeDataProvider,
+	globalRepoProvider: ImmyBotScriptTreeDataProvider,
 	scriptManager: ScriptManager
 ) {
 	// Register command to refresh views
@@ -70,14 +70,14 @@ export function registerCommands(
 	// Create file command
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.createFile', async () => {
-			await handleCreateFile(state, memFs, localRepoProvider, globalRepoProvider);
+			await handleCreateFile(state, immyFs, localRepoProvider, globalRepoProvider);
 		})
 	);
 
 	// Delete file command
 	context.subscriptions.push(
 		vscode.commands.registerCommand('immybot.deleteFile', async () => {
-			await handleDeleteFile(state, memFs, localRepoProvider, globalRepoProvider);
+			await handleDeleteFile(state, immyFs, localRepoProvider, globalRepoProvider);
 		})
 	);
 
@@ -117,7 +117,7 @@ export function registerCommands(
 	// Listen for document opens to start the language server when needed
 	context.subscriptions.push(
 		vscode.workspace.onDidOpenTextDocument(async (document) => {
-			if (document.uri.scheme === 'memfs') {
+			if (document.uri.scheme === 'immyfs') {
 				if (document.languageId === 'metascript') {
 					await startLanguageServerAndClient(context);
 				}
@@ -125,15 +125,15 @@ export function registerCommands(
 		})
 	);
 
-	// Register memfs commands
-	registerMemfsCommands(context, state, memFs);
+	// Register immyfs commands
+	registerMemfsCommands(context, state, immyFs);
 }
 
 async function handleCreateFile(
 	state: ExtensionState, 
-	memFs: MemFS, 
-	localRepoProvider: ImmyBotRepoProvider, 
-	globalRepoProvider: ImmyBotRepoProvider
+	immyFs: ImmyBotFileSystemProvider, 
+	localRepoProvider: ImmyBotScriptTreeDataProvider, 
+	globalRepoProvider: ImmyBotScriptTreeDataProvider
 ) {
 	if (!state.initialized) {
 		vscode.window.showErrorMessage('Please sign in first.');
@@ -198,7 +198,7 @@ async function handleCreateFile(
 		}
 
 		// Write the file
-		memFs.writeFile(fileUri, Buffer.from(defaultContent), { create: true, overwrite: false });
+		immyFs.writeFile(fileUri, Buffer.from(defaultContent), { create: true, overwrite: false });
 
 		// Open the file
 		const document = await vscode.workspace.openTextDocument(fileUri);
@@ -353,7 +353,7 @@ function createFilePathAndContent(
 		folderPath = `${rootFolder}/${categoryPaths[selectedSubCategory.value as keyof typeof categoryPaths] || selectedSubCategory.dataType}`;
 	}
 
-	const fileUri = vscode.Uri.parse(`memfs:/${folderPath}/${fileName}${extension}`);
+	const fileUri = vscode.Uri.parse(`immyfs:/${folderPath}/${fileName}${extension}`);
 
 	// Create default content
 	const defaultContent = createDefaultContent(
@@ -414,9 +414,9 @@ function createDefaultContent(
 
 async function handleDeleteFile(
 	state: ExtensionState,
-	memFs: MemFS,
-	localRepoProvider: ImmyBotRepoProvider,
-	globalRepoProvider: ImmyBotRepoProvider
+	immyFs: ImmyBotFileSystemProvider,
+	localRepoProvider: ImmyBotScriptTreeDataProvider,
+	globalRepoProvider: ImmyBotScriptTreeDataProvider
 ) {
 	if (!state.initialized) {
 		vscode.window.showErrorMessage('Please sign in first.');
@@ -446,8 +446,8 @@ async function handleDeleteFile(
 					if (subFolder === 'Software') {
 						// Handle software subcategories
 						for (const softwareSubFolder of softwareSubFolders) {
-							const dirPath = `memfs:/${rootFolder}/${subFolder}/${softwareSubFolder}`;
-							const files = memFs.readDirectory(vscode.Uri.parse(dirPath));
+							const dirPath = `immyfs:/${rootFolder}/${subFolder}/${softwareSubFolder}`;
+							const files = immyFs.readDirectory(vscode.Uri.parse(dirPath));
 							for (const [fileName, fileType] of files) {
 								if (fileType === vscode.FileType.File) {
 									allFiles.push({
@@ -460,8 +460,8 @@ async function handleDeleteFile(
 					} else if (subFolder === 'Deployment') {
 						// Handle deployment subcategories
 						for (const deploymentSubFolder of deploymentSubFolders) {
-							const dirPath = `memfs:/${rootFolder}/${subFolder}/${deploymentSubFolder}`;
-							const files = memFs.readDirectory(vscode.Uri.parse(dirPath));
+							const dirPath = `immyfs:/${rootFolder}/${subFolder}/${deploymentSubFolder}`;
+							const files = immyFs.readDirectory(vscode.Uri.parse(dirPath));
 							for (const [fileName, fileType] of files) {
 								if (fileType === vscode.FileType.File) {
 									allFiles.push({
@@ -473,8 +473,8 @@ async function handleDeleteFile(
 						}
 					} else {
 						// Handle regular folders
-						const dirPath = `memfs:/${rootFolder}/${subFolder}`;
-						const files = memFs.readDirectory(vscode.Uri.parse(dirPath));
+						const dirPath = `immyfs:/${rootFolder}/${subFolder}`;
+						const files = immyFs.readDirectory(vscode.Uri.parse(dirPath));
 						for (const [fileName, fileType] of files) {
 							if (fileType === vscode.FileType.File) {
 								allFiles.push({
@@ -484,7 +484,7 @@ async function handleDeleteFile(
 							}
 						}
 					}
-				} catch (e) {
+				} catch {
 					// Directory might not exist, continue
 				}
 			}
@@ -513,7 +513,7 @@ async function handleDeleteFile(
 		);
 
 		if (confirmResult === 'Delete') {
-			memFs.delete(selectedFile.uri);
+			immyFs.delete(selectedFile.uri);
 			vscode.window.showInformationMessage(`Deleted file: ${selectedFile.label}`);
 
 			// Refresh the views
@@ -527,22 +527,22 @@ async function handleDeleteFile(
 	}
 }
 
-function registerMemfsCommands(context: vscode.ExtensionContext, state: ExtensionState, memFs: MemFS) {
-	context.subscriptions.push(vscode.commands.registerCommand('memfs.reset', async (_) => {
+function registerMemfsCommands(context: vscode.ExtensionContext, state: ExtensionState, immyFs: ImmyBotFileSystemProvider) {
+	context.subscriptions.push(vscode.commands.registerCommand('immyfs.reset', async (_) => {
 		await attemptSignIn(true, state, () => {}, async () => {});
 	}));
 
-	context.subscriptions.push(vscode.commands.registerCommand('memfs.addFile', _ => {
+	context.subscriptions.push(vscode.commands.registerCommand('immyfs.addFile', _ => {
 		if (state.initialized) {
-			memFs.writeFile(vscode.Uri.parse(`memfs:/file.txt`), Buffer.from('foo'), { create: true, overwrite: true });
+			immyFs.writeFile(vscode.Uri.parse(`immyfs:/file.txt`), Buffer.from('foo'), { create: true, overwrite: true });
 		}
 	}));
 
-	context.subscriptions.push(vscode.commands.registerCommand('memfs.deleteFile', _ => {
+	context.subscriptions.push(vscode.commands.registerCommand('immyfs.deleteFile', _ => {
 		if (state.initialized) {
-			memFs.delete(vscode.Uri.parse('memfs:/file.txt'));
+			immyFs.delete(vscode.Uri.parse('immyfs:/file.txt'));
 		}
 	}));
 
-	vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('memfs:/'), name: 'ImmyBot' });
+	vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('immyfs:/'), name: 'ImmyBot' });
 }

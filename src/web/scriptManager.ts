@@ -2,24 +2,24 @@
  * Script management for ImmyBot VS Code extension
  */
 import * as vscode from 'vscode';
-import { MemFS } from './fileSystemProvider';
+import { ImmyBotFileSystemProvider } from './immyBotFileSystemProvider';
 import { ImmyBotClient } from './immyBotClient';
 import { ScriptCategory } from './types';
 
 export class ScriptManager {
-	constructor(private memFs: MemFS) {}
+	constructor(private immyFs: ImmyBotFileSystemProvider) {}
 
 	async fetchScripts() {
 		const client = new ImmyBotClient();
 		const response = await client.fetchJson<any>('/api/v1/scripts');
 
 		// Create top-level directories for Local and Global scripts
-		this.memFs.createDirectory(vscode.Uri.parse('memfs:/My Scripts'));
-		this.memFs.createDirectory(vscode.Uri.parse('memfs:/Global Scripts'));
+		this.immyFs.createDirectory(vscode.Uri.parse('immyfs:/My Scripts'));
+		this.immyFs.createDirectory(vscode.Uri.parse('immyfs:/Global Scripts'));
 
 		// Create .vscode directory and mcp.json to prevent VS Code errors
-		this.memFs.createDirectory(vscode.Uri.parse('memfs:/.vscode'));
-		this.memFs.writeFile(vscode.Uri.parse('memfs:/.vscode/mcp.json'), Buffer.from('{}'), { create: true, overwrite: true });
+		this.immyFs.createDirectory(vscode.Uri.parse('immyfs:/.vscode'));
+		this.immyFs.writeFile(vscode.Uri.parse('immyfs:/.vscode/mcp.json'), Buffer.from('{}'), { create: true, overwrite: true });
 
 		// Create subdirectories under My Scripts
 		this.createScriptDirectories('My Scripts');
@@ -43,19 +43,19 @@ export class ScriptManager {
 		// Create main subdirectories
 		const mainDirs = ['Modules', 'Functions', 'Software', 'Task', 'Inventory', 'Preflight', 'Integration', 'Deployment'];
 		for (const dir of mainDirs) {
-			this.memFs.createDirectory(vscode.Uri.parse(`memfs:/${rootFolder}/${dir}`));
+			this.immyFs.createDirectory(vscode.Uri.parse(`immyfs:/${rootFolder}/${dir}`));
 		}
 
 		// Create Software subcategories
 		const softwareSubDirs = ['Detection', 'Download', 'Dynamic Version', 'Action (Install|Uninstall|Upgrade)'];
 		for (const subDir of softwareSubDirs) {
-			this.memFs.createDirectory(vscode.Uri.parse(`memfs:/${rootFolder}/Software/${subDir}`));
+			this.immyFs.createDirectory(vscode.Uri.parse(`immyfs:/${rootFolder}/Software/${subDir}`));
 		}
 
 		// Create Deployment subcategories
 		const deploymentSubDirs = ['Filter', 'Metascript'];
 		for (const subDir of deploymentSubDirs) {
-			this.memFs.createDirectory(vscode.Uri.parse(`memfs:/${rootFolder}/Deployment/${subDir}`));
+			this.immyFs.createDirectory(vscode.Uri.parse(`immyfs:/${rootFolder}/Deployment/${subDir}`));
 		}
 	}
 
@@ -69,7 +69,7 @@ export class ScriptManager {
 
 		// Map script category to the appropriate folder structure
 		folderPath = this.getCategoryFolderPath(script.scriptCategory, rootFolder);
-		fileName = `memfs:/${folderPath}/${script.name}${extension}`;
+		fileName = `immyfs:/${folderPath}/${script.name}${extension}`;
 
 		// Add metadata to the script content
 		let scriptContent = script.action;
@@ -80,7 +80,7 @@ export class ScriptManager {
 		}
 
 		try {
-			this.memFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(scriptContent), { create: true, overwrite: true });
+			this.immyFs.writeFile(vscode.Uri.parse(fileName), Buffer.from(scriptContent), { create: true, overwrite: true });
 		} catch (e) {
 			console.error(e);
 		}

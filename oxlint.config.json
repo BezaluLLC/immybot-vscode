@@ -1,0 +1,12 @@
+{
+  "extends": ["recommended", "typescript"],
+  "ignorePatterns": [
+    "dist/**",
+    "build/**",
+    "node_modules/**"
+  ],
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-console": "off"
+  }
+}
